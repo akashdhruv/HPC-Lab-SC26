@@ -1,0 +1,6 @@
+&rd
+  nx = 96, ny = 64, lx = 96.0d0, ly = 64.0d0,
+  du = 0.16d0, dv = 0.08d0, feed = 0.035d0, kill = 0.065d0,
+  cfl = 0.8d0, nsteps = 3000, interval = 300,
+  bc_y = 'neumann', seed = 2026
+/
