@@ -1,6 +1,6 @@
 {
   "extensions": [
-    "../../.pi/extensions/sc26"
+    "../../.pi/extensions/hpc-lab"
   ],
   "quietStartup": true,
   "hideThinkingBlock": true,

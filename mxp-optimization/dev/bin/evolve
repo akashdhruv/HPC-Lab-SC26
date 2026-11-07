@@ -1,0 +1,17 @@
+#!/bin/sh
+''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
+# Start the OpenEvolve search of an approved optimize run, in the detached container
+# hpc-lab-mxp-optimization. Progress: dev/bin/box make status EXP=<R>; stop: docker stop hpc-lab-mxp-optimization.
+#
+#   dev/bin/evolve <R>
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from hpclab import Approvals, Box
+
+if len(sys.argv) != 2:
+    sys.exit("usage: dev/bin/evolve <R>")
+run = Path(sys.argv[1]).as_posix().rstrip("/")
+Approvals(run).require("plan")
+sys.exit(Box("hpc-lab-mxp", "mxp-optimization").run(["dev/tools/search.sh", run], detach=True))

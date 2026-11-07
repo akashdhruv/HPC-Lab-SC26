@@ -1,0 +1,35 @@
+#!/bin/sh
+''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
+# State of a transformation: approvals, groups, agent log, and its loop runs.
+#
+#   dev/bin/status [name]
+import sys
+from pathlib import Path
+
+SYSTEM = Path(__file__).resolve().parents[2]
+ROOT = SYSTEM / "dev" / "transformations"
+
+
+def tail(path, n=6):
+    return "\n".join(path.read_text().splitlines()[-n:]) if path.is_file() else None
+
+
+names = sorted(p.name for p in ROOT.iterdir() if p.is_dir())
+name = sys.argv[1] if len(sys.argv) > 1 else (names[0] if names else None)
+if not name:
+    sys.exit("no transformation yet: run the translate skill in plan mode")
+task = ROOT / name
+lines = lambda f, prefix: [l for l in (task / f).read_text().splitlines() if l.startswith(prefix)]
+
+print("== approved")
+print("\n".join(lines("approvals.toml", "item")) or "nothing")
+print("== groups")
+print("\n".join(lines("current_plan.md", "- Group")))
+print("== agent log")
+print(tail(task / "agent_log.md") or "empty")
+print("== loop")
+print(tail(task / "runs" / "loop.log") or "not run")
+runs = sorted((task / "runs").glob("*/run.toml"), key=lambda p: p.stat().st_mtime)
+for run in runs[-3:]:
+    keep = ("run_id", "model", "loops_completed", "stop_reason")
+    print("  " + "  ".join(l for l in run.read_text().splitlines() if l.split(" ")[0] in keep))

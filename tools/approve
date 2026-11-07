@@ -1,0 +1,16 @@
+#!/bin/sh
+''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
+# Record a human approval in an instance's approvals.toml. The scientist runs this; agents never do.
+#
+#   tools/approve <instance> "<item>" ["note"]
+#
+# Items: "plan", then "Group <k>" (translate), "result" (raptorize) or "candidate <id>" (optimize).
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hpclab import Approvals
+
+if len(sys.argv) < 3:
+    sys.exit('usage: tools/approve <instance> "<item>" ["note"]')
+print(Approvals(sys.argv[1]).add(sys.argv[2], " ".join(sys.argv[3:])), end="")

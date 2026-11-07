@@ -1,5 +1,13 @@
-#!/usr/bin/env bash
-#
+#!/bin/sh
+''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
 # Build app/ in the container.
+#
+#   dev/bin/build
+import sys
+from pathlib import Path
 
-exec "$(dirname "$0")/box" make -C app "$@"
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from hpclab import Box
+
+BOX = Box("hpc-lab-translate", "code-translation")
+sys.exit(BOX.run(["make", "-C", "app", *sys.argv[1:]]))

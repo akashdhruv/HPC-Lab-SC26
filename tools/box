@@ -1,38 +1,14 @@
-#!/usr/bin/env bash
-#
+#!/bin/sh
+''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
 # Run a command in an agent system's docker image, with the tutorial mounted at /work.
-# Works from Linux, macOS and Git Bash on Windows.
 #
 #   tools/box <image> <system> [-d] <command ...>
-#
-# -d runs it detached, as the container sc26-<system> (stop it with docker stop).
+import sys
+from pathlib import Path
 
-set -euo pipefail
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hpclab import Box
 
-image="$1"
-system="$2"
-shift 2
-
-root="$(cd "$(dirname "$0")/.." && pwd)"
-options=(--rm --init -w "/work/$system")
-
-if [ -n "${MAX_PROGRAMS:-}" ]; then
-    options+=(-e "MAX_PROGRAMS=$MAX_PROGRAMS")
-fi
-
-if [ "${1:-}" = "-d" ]; then
-    options+=(-d --name "sc26-$system")
-    shift
-fi
-
-case "$(uname -s)" in
-    MINGW* | MSYS* | CYGWIN*)
-        export MSYS_NO_PATHCONV=1
-        options+=(-v "$(cd "$root" && pwd -W):/work")
-        ;;
-    *)
-        options+=(-v "$root:/work" --user "$(id -u):$(id -g)")
-        ;;
-esac
-
-exec docker run "${options[@]}" "$image" "$@"
+if len(sys.argv) < 4:
+    sys.exit("usage: tools/box <image> <system> [-d] <command ...>")
+Box(sys.argv[1], sys.argv[2]).main(sys.argv[3:])

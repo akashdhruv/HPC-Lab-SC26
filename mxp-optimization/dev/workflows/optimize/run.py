@@ -79,9 +79,9 @@ class Run:
     @classmethod
     def new(cls, stage, experiment):
         """
-        Scaffold the next run of a stage (raptorize or optimize) from its templates/
+        Scaffold the next run of a stage (raptorize or optimize) from its skill's templates/
         """
-        templates = MXP / "dev" / "workflows" / stage / "templates"
+        templates = MXP / ".agents" / "skills" / stage / "templates"
         if not templates.is_dir():
             sys.exit(f"unknown stage: {stage}")
 

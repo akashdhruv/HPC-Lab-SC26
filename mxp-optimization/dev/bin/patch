@@ -1,0 +1,24 @@
+#!/bin/sh
+''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
+# Save app/'s changes since HEAD as one patch, untracked files included (raptorize checkpoints).
+# Runs natively with git; the real index is never touched.
+#
+#   dev/bin/patch <R>/patches/<k>-<name>.patch
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+if len(sys.argv) != 2:
+    sys.exit("usage: dev/bin/patch <R>/patches/<k>-<name>.patch")
+system = Path(__file__).resolve().parents[2]
+out = Path(sys.argv[1]).resolve()
+
+with tempfile.TemporaryDirectory() as tmp:
+    env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
+    git = lambda *args, **kw: subprocess.run(["git", *args], cwd=system, env=env, check=True, **kw)
+    git("read-tree", "HEAD")
+    git("add", "-A", "app")
+    out.write_bytes(git("diff", "--cached", "--binary", "HEAD", "--", "app", capture_output=True).stdout)
+print(f"saved {sys.argv[1]}")

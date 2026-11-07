@@ -1,0 +1,4 @@
+# Scripts run inside Linux containers and Git Bash: keep LF on every OS (the autocrlf default
+# of Git for Windows would break them). Windows launchers stay CRLF.
+* text=auto eol=lf
+*.cmd text eol=crlf

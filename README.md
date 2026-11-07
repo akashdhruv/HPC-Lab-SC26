@@ -1,8 +1,8 @@
 # SC26 hands-on: programmable agent systems for scientific software
 
 An agent system is the program of an HPC process, written as version-controlled files: stage
-contracts, templates, tools and a provenance record. It runs under any orchestrator; here pi
-(and CodeScribe). Every stage runs the same way:
+contracts, templates, tools and a provenance record. It runs under any orchestrator (pi,
+Claude Code, Codex, OpenCode, ...) on Windows, macOS or Linux. Every stage runs the same way:
 
     plan mode  ->  approval  ->  run mode (act, verify)  ->  acceptance
     agent          scientist     harness, agent              scientist
@@ -17,53 +17,72 @@ contracts, templates, tools and a provenance record. It runs under any orchestra
 
 | system | stages | verification boundary |
 |---|---|---|
-| `code-translation/` | translate (loop: pi or CodeScribe) | `tests/check.sh`: the original Fortran's output to 1e-12 |
+| `code-translation/` | translate (CodeScribe loop) | `tests/check.sh`: the original Fortran's output to 1e-12 |
 | `mxp-optimization/` | raptorize (session), optimize (OpenEvolve) | fp64 unchanged; an audited, red-teamed evaluator with an equivalence guard |
 
-## Setup (Windows, macOS, Linux)
+## What runs where
 
-Native: [pi](https://pi.dev) (Node.js), git (on Windows, Git for Windows: pi uses its Git Bash),
-Docker, and Python >= 3.10 for CodeScribe. The agents and their model calls run natively; every
-build, run and search runs in one docker image per system.
+- **Orchestrator** (yours): the interactive stages and plan modes. It reads `AGENTS.md`
+  (Claude Code through `CLAUDE.md`) and the stage skills in `<system>/.agents/skills/`
+  (`.claude/skills` is a symlink to them).
+- **Harnesses** (the system's): the translate loop (CodeScribe, `dev/bin/loop`) and the optimize
+  search (OpenEvolve, `dev/bin/evolve`). They call the model in `config.yaml` and enforce their
+  own rules, so they behave the same whichever orchestrator, or person, starts them.
+- **Containers**: every build, run and search, one docker image per system.
+
+## Setup
+
+Native: git, Docker, Python >= 3.10 and an orchestrator; Node.js if that is
+[pi](https://pi.dev). On Windows, Git for Windows (its Git Bash runs `setup.sh`; its tools serve
+the loop), and clone with `git clone -c core.symlinks=true` (Developer Mode on) so Claude Code
+sees `.claude/skills`.
 
 ```bash
 git clone --recursive <this repo> && cd SC26-Tutorial
-./setup.sh                       # pi, images sc26-translate and sc26-mxp, CodeScribe, both checks
-$EDITOR config.yaml              # your endpoint and key
-cd code-translation && pi        # or mxp-optimization; trust the folder once
+./setup.sh                       # images hpc-lab-translate and hpc-lab-mxp, CodeScribe in .venv, both checks
+$EDITOR config.yaml              # endpoint and key of the harnesses (and of pi)
+cd code-translation && pi        # or claude, codex, opencode; or cd mxp-optimization
 ```
 
-On Windows, run these in Git Bash.
+Every entry point (`tools/*`, `<system>/dev/bin/*`) is Python and is called by path, the same in
+bash, Git Bash, cmd.exe and PowerShell.
 
-## A stage in pi
+## A stage, in any orchestrator
+
+Ask for the stage ("translate, plan mode"); the agent follows the skill. The scientist's and
+the harness's steps are shell lines (from the system folder):
 
 | | translate | raptorize | optimize |
 |---|---|---|---|
-| plan mode | `/skill:translate plan` | `/skill:raptorize plan` | `/skill:optimize plan` |
-| approval | `/approve <name> plan` | `/approve <R> plan` | `/approve <R> plan` |
-| run mode | `/loop <name>`, `/status` | `/skill:raptorize run` (3 checkpoints) | `/evolve <R>`, `/evolve-status <R>` |
-| verify | `/skill:translate run` | the checkpoint 3 table | `/skill:optimize run` |
-| acceptance | `/approve <name> "Group 1"` | `/approve <R> result` | `/approve <R> "candidate <id>"` |
+| plan mode | skill `translate` | skill `raptorize` | skill `optimize` |
+| approval | `../tools/approve dev/transformations/<name> plan` | `../tools/approve <R> plan` | `../tools/approve <R> plan` |
+| run mode | `dev/bin/loop -b <name>`, `dev/bin/status <name>` | the skill, 3 checkpoints | `dev/bin/evolve <R>`, `dev/bin/box make status EXP=<R>` |
+| verify | the skill's run mode | the checkpoint 3 table | the skill's run mode |
+| acceptance | `../tools/approve dev/transformations/<name> "Group 1"` | `../tools/approve <R> result` | `../tools/approve <R> "candidate <id>"` |
 
-Each `/command` is one shell line (`<system>/.pi/extensions/*.ts`), shown with its output.
-Approvals go only through `tools/approve.sh`; act steps refuse unapproved plans.
+In pi the same lines are commands: `/skill:translate`, `/approve`, `/loop`, `/status`, `/evolve`,
+`/evolve-status` (`<system>/.pi/extensions/*.ts`). Approvals go only through `tools/approve`,
+run by the scientist; act steps refuse unapproved plans. pi (`.pi/extensions/hpc-lab/guard.ts`)
+and Claude Code (`.claude/settings.json`) also block the agent from approving.
 
 ## Layout
 
 ```
-config.yaml, tools/                    shared: endpoint, approvals
-.pi/extensions/sc26/                   pi adapter: provider, compact output, command helper
+config.yaml                            endpoint of the harnesses (and of pi)
+tools/                                 approve, approved, box; hpclab.py (shared helpers)
+.pi/extensions/hpc-lab/                pi adapter: provider, compact output, approvals guard, commands
 
 code-translation/
-  app/, tests/check.sh                 rd2d (13 Fortran units) and its oracle
-  dev/tools/, dev/bin/                 readiness, the two loop runners, status
-  dev/transformations/<name>/          one folder per transformation
-  .pi/skills/translate/                the stage: SKILL.md + templates/
+  .agents/skills/translate/            the stage: SKILL.md + templates/
+  app/, tests/check.sh, dev/app.md     rd2d (13 Fortran units), its oracle, the app interface
+  dev/bin/                             oracle, readiness, build, box, loop, status
+  dev/transformations/<name>/          one folder per transformation; runs/ holds each loop's record
 
 mxp-optimization/
-  app/                                 the bubble mini-app, untouched FP64 code
-  dev/workflows/raptorize/             contract, worked example, reference.patch
-  dev/workflows/optimize/              contract, templates, Evaluator, Run
+  .agents/skills/{raptorize,optimize}/ the stages: SKILL.md + templates/
+  app/, dev/app.md                     the bubble mini-app (untouched FP64 code), the app interface
+  dev/bin/                             box, evolve, patch
+  dev/workflows/                       worked example and reference.patch; the search harness
   dev/tools/RAPTOR, dev/tools/OpenEvolve   submodules
   experiments/<E>/<n>-<stage>/         one folder per stage run
 ```
