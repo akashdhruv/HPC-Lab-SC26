@@ -15,14 +15,17 @@ autonomous loop (translate) or an evolutionary search (optimize).
 ## Where things are
 
 - Stage contracts: one skill per stage, `<system>/.agents/skills/<stage>/SKILL.md`, with its
-  `templates/`. pi, Codex and OpenCode discover them; `.claude/skills` is a symlink to the same
-  folder. If your orchestrator lists no such skill, read that SKILL.md yourself when the
+  `templates/`. Everything an orchestrator needs is in `AGENTS.md` and `.agents/`: Codex and
+  OpenCode read them as they are; Claude Code and pi read their own `.claude/`, `.pi/`, which
+  `tools/setup` makes as untracked links into `.agents/` (`.agents/adapters/`). If your orchestrator lists no such skill, read that SKILL.md yourself when the
   scientist asks for the stage.
 - Entry points: `tools/*` and `<system>/dev/bin/*`, plain Python. Call them by path
   (`dev/bin/oracle`); the same name works in bash, Git Bash, cmd.exe and PowerShell (a `.cmd`
   twin). Builds and runs happen in each system's docker image; agents and model calls run natively.
+- Shortcuts: `!<shell line>` runs a line in any orchestrator; the systems' skills are the rest.
 - Model endpoint of the harnesses (the loop `tools/loop.py`, OpenEvolve): `config.yaml`.
-- Setup: `tools/setup` (`--native` skips docker); python packages only in `.venv`.
+- Setup: `tools/setup` (`--native` skips docker); python packages only in `.venv`
+  (`hpclab.Venv`: made on first use, first on PATH in pi and Claude Code sessions).
 
 ## Rules
 

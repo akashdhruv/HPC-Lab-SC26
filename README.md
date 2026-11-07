@@ -23,8 +23,9 @@ Claude Code, Codex, OpenCode, ...) on Windows, macOS or Linux. Every stage runs 
 ## What runs where
 
 - **Orchestrator** (yours): the interactive stages and plan modes. It reads `AGENTS.md`
-  (Claude Code through `CLAUDE.md`) and the stage skills in `<system>/.agents/skills/`
-  (`.claude/skills` is a symlink to them).
+  and the skills in `<system>/.agents/skills/`. Only `AGENTS.md` and `.agents/` are tracked:
+  Codex and OpenCode read them directly, and `tools/setup` links Claude Code's `.claude/` and pi's
+  `.pi/` into `.agents/` (symlinks; on Windows junctions, or copies where symlinks are refused).
 - **Harnesses** (the system's): the translate loop (`tools/loop.py` on the CodeScribe library,
   started by `dev/bin/loop`) and the optimize search (OpenEvolve, `dev/bin/evolve`). They call the model in `config.yaml` and enforce their
   own rules, so they behave the same whichever orchestrator, or person, starts them.
@@ -34,8 +35,7 @@ Claude Code, Codex, OpenCode, ...) on Windows, macOS or Linux. Every stage runs 
 
 Native: git, Docker, Python >= 3.10 and an orchestrator (any of them); Node.js if that is
 [pi](https://pi.dev). On Windows, Git for Windows (its Git Bash runs `setup.sh`; its tools serve
-the loop), and clone with `git clone -c core.symlinks=true` (Developer Mode on) so Claude Code
-sees `.claude/skills`.
+the loop).
 
 ```bash
 git clone --recursive <this repo> && cd SC26-Tutorial
@@ -47,7 +47,8 @@ cd code-translation && pi        # or claude, codex, opencode; or cd mxp-optimiz
 Every entry point (`tools/*`, `<system>/dev/bin/*`) is Python and is called by path, the same in
 bash, Git Bash, cmd.exe and PowerShell (`./setup.sh` is the same as `tools/setup`). Python
 packages go only into the tutorial's `.venv`: `tools/requirements.txt` pins CodeScribe to a commit
-of its git repo, and entry points that need it rerun themselves under `.venv`.
+of its git repo; entry points that need it make `.venv` on first use and rerun under it, and
+pi and Claude Code sessions put it first on PATH.
 
 ## The translate loop, from any orchestrator
 
@@ -58,8 +59,7 @@ of its git repo, and entry points that need it rerun themselves under `.venv`.
 bash allowlist, reviewer rules), the oracle after every author session and the stop rule are this
 repo's code; CodeScribe supplies the agent, its bounded tools and the model client. Each run is
 recorded in `dev/transformations/<name>/runs/<run_id>/`. The orchestrator only launches it:
-`/loop <name>` in pi, Claude Code and OpenCode (`.pi/extensions`, `.claude/commands`,
-`.opencode/command`), the translate skill's run mode in Codex, or the shell line itself.
+the `csloop` skill, the translate skill's run mode, or the shell line itself.
 
 ## A stage, in any orchestrator
 
@@ -70,33 +70,35 @@ the harness's steps are shell lines (from the system folder):
 |---|---|---|---|
 | plan mode | skill `translate` | skill `raptorize` | skill `optimize` |
 | approval | `../tools/approve dev/transformations/<name> plan` | `../tools/approve <R> plan` | `../tools/approve <R> plan` |
-| run mode | `dev/bin/loop -b <name>`, `dev/bin/status <name>` | the skill, 3 checkpoints | `dev/bin/evolve <R>`, `dev/bin/box make status EXP=<R>` |
+| run mode | `dev/bin/loop -b <name>`, `dev/bin/status <name>` | the skill, 3 checkpoints | `dev/bin/evolve <R>`, `dev/bin/container make status EXP=<R>` |
 | verify | the skill's run mode | the checkpoint 3 table | the skill's run mode |
 | acceptance | `../tools/approve dev/transformations/<name> "Group 1"` | `../tools/approve <R> result` | `../tools/approve <R> "candidate <id>"` |
 
-In pi the same lines are commands: `/skill:translate`, `/approve`, `/loop`, `/status`, `/evolve`,
-`/evolve-status` (`<system>/.pi/extensions/*.ts`). Approvals go only through `tools/approve`,
-run by the scientist; act steps refuse unapproved plans. pi (`.pi/extensions/hpc-lab/guard.ts`)
-and Claude Code (`.claude/settings.json`) also block the agent from approving.
+In any orchestrator, `!` + a line runs it (`!../tools/approve dev/transformations/<name> plan`);
+skills run the stages (`/skill:translate` in pi), plus `csloop` and `csloop-status` in
+code-translation. Approvals go only through `tools/approve`, run by the scientist; act steps
+refuse unapproved plans. pi (`.agents/adapters/pi/hpclab/guard.ts`) and Claude Code
+(`.agents/adapters/claude/settings.json`) also block the agent from approving.
 
 ## Layout
 
 ```
 config.yaml                            endpoint of the harnesses (and of pi)
-tools/                                 setup, approve, approved, box; hpclab.py (shared helpers)
+tools/                                 setup, approve, approved, container; hpclab.py (shared helpers)
 tools/loop.py, tools/requirements.txt  the translate loop; the pinned .venv packages (CodeScribe)
-.pi/extensions/hpc-lab/                pi adapter: provider, compact output, approvals guard, commands
+.agents/adapters/                     Claude Code's settings, pi's settings and extension (hpclab:
+                                       provider, compact output, approvals guard), linked by setup
 
 code-translation/
   .agents/skills/translate/            the stage: SKILL.md + templates/
   app/, tests/check.sh, dev/app.md     rd2d (13 Fortran units), its oracle, the app interface
-  dev/bin/                             oracle, readiness, build, box, loop, status
+  dev/bin/                             oracle, readiness, build, container, loop, status
   dev/transformations/<name>/          one folder per transformation; runs/ holds each loop's record
 
 mxp-optimization/
   .agents/skills/{raptorize,optimize}/ the stages: SKILL.md + templates/
   app/, dev/app.md                     the bubble mini-app (untouched FP64 code), the app interface
-  dev/bin/                             box, evolve, patch
+  dev/bin/                             container, evolve, patch
   dev/workflows/                       worked example and reference.patch; the search harness
   dev/tools/RAPTOR, dev/tools/OpenEvolve   submodules
   experiments/<E>/<n>-<stage>/         one folder per stage run

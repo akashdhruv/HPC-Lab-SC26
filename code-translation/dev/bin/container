@@ -1,13 +1,12 @@
 #!/bin/sh
 ''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
-# Run a command in the hpc-lab-mxp image, from mxp-optimization/.
+# Run a command in this system's docker image, from code-translation/ (tools/container from here).
 #
-#   dev/bin/box make check
-#   dev/bin/box -d dev/tools/search.sh <R>      (detached: the container hpc-lab-mxp-optimization)
+#   dev/bin/container make -C app
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
-from hpclab import Box
+from hpclab import Container
 
-Box("hpc-lab-mxp", "mxp-optimization").main(sys.argv[1:])
+Container.of(__file__).main(sys.argv[1:])

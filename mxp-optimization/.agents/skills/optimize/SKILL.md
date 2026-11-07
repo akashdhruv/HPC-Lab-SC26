@@ -10,11 +10,11 @@ emulation of a low precision, by searching rewrites with OpenEvolve. The objecti
 open-ended and no one knows the answer, but a score can be trusted: that is when a search beats
 a loop or a session. Instance R: `experiments/<E>/<n>-optimize/`. Precondition: raptorize
 accepted in the same E. Commands run from `mxp-optimization/`; everything runs in the container
-(`dev/bin/box`). The harness code is in `dev/workflows/optimize/` (run.py, evaluation.py).
+(`dev/bin/container`). The harness code is in `dev/workflows/optimize/` (run.py, evaluation.py).
 
 ## Plan mode
 
-1. `dev/bin/box make run STAGE=optimize E=<same E>` prints R.
+1. `dev/bin/container make run STAGE=optimize E=<same E>` prints R.
 2. Ask (proposing a default for each, explained plainly) and fill R's plan.md (including who
    planned it: your orchestrator and model), experiment.yaml and evaluator.py; match the mode
    and columns raptorize added:
@@ -27,21 +27,21 @@ accepted in the same E. Commands run from `mxp-optimization/`; everything runs i
 | rules | types stay double, no library calls but min/max/abs, no preprocessor |
 | job | models from config.yaml `evolve`, max_programs 10, timeout 300 s |
 
-3. Calibrate: `dev/bin/box make evaluate EXP=<R>` twice, identical scores; put the seed score
+3. Calibrate: `dev/bin/container make evaluate EXP=<R>` twice, identical scores; put the seed score
    in the problem. The prompt states only rules the evaluator enforces.
-4. Red-team: `dev/bin/box make redteam EXP=<R>`, 0 holes.
+4. Red-team: `dev/bin/container make redteam EXP=<R>`, 0 holes.
 5. Show decisions, calibration and red-team; the scientist approves with `../tools/approve <R> plan`.
 
 ## Run mode
 
 1. Act: `dev/bin/evolve <R>` starts the search in the detached container
    `hpc-lab-mxp-optimization` (it refuses an unapproved plan); progress
-   `dev/bin/box make status EXP=<R>`; `docker stop hpc-lab-mxp-optimization` ends it
-   (`dev/bin/box make resume EXP=<R>` continues).
-2. Verify: `dev/bin/box make harvest EXP=<R>`; for the top 3, the diff against seed.cpp and why
+   `dev/bin/container make status EXP=<R>`; `docker stop hpc-lab-mxp-optimization` ends it
+   (`dev/bin/container make resume EXP=<R>` continues).
+2. Verify: `dev/bin/container make harvest EXP=<R>`; for the top 3, the diff against seed.cpp and why
    the rewrite reduces rounding error while staying exact in real arithmetic; re-score the best.
 3. Acceptance: the scientist records `../tools/approve <R> "candidate <id>"`; then
-   `dev/bin/box make apply EXP=<R> ID=<id>`.
+   `dev/bin/container make apply EXP=<R> ID=<id>`.
 
 ## Checks (the verification boundary)
 

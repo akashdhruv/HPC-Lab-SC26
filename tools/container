@@ -1,0 +1,13 @@
+#!/bin/sh
+''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
+# Run a command in the docker image of the agent system you are in (Container.IMAGES in hpclab.py),
+# with the tutorial mounted at /work and the system as workdir.
+#
+#   tools/container [-d] <command ...>
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hpclab import Container
+
+Container.of(Path.cwd()).main(sys.argv[1:])

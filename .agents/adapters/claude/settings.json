@@ -7,5 +7,14 @@
       "Bash(python tools/approve:*)",
       "Bash(python ../tools/approve:*)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "sh \"$(git rev-parse --show-toplevel)/.agents/adapters/claude/venv.sh\"" }
+        ]
+      }
+    ]
   }
 }

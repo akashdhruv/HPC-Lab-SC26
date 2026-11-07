@@ -4,9 +4,10 @@
 #
 #   tools/setup [--native]
 #
-# Native: .venv with tools/requirements.txt (CodeScribe from its git repo, for dev/bin/loop),
-# and pi if Node.js is here. Then (unless --native) the submodules, the docker images
-# hpc-lab-translate and hpc-lab-mxp, and both checks.
+# Native: Claude Code's .claude/ and pi's .pi/ as links into .agents (Orchestrators), .venv with
+# tools/requirements.txt (CodeScribe from its git repo, for dev/bin/loop), and pi if Node.js is here.
+# Then (unless --native) the submodules, the docker images hpc-lab-translate and hpc-lab-mxp,
+# and both checks.
 import os
 import shutil
 import subprocess
@@ -14,19 +15,52 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+from hpclab import Container, Venv
+
+
+class Orchestrators:
+    """
+    Codex and OpenCode read AGENTS.md and .agents/skills; Claude Code and pi read their own folder
+    of the directory they start in, so link it (untracked) to .agents, in the root and each system
+    """
+
+    LINKS = {".claude/settings.json": ".agents/adapters/claude/settings.json",
+             ".pi/settings.json": ".agents/adapters/pi/settings.json",
+             ".pi/extensions/hpclab": ".agents/adapters/pi/hpclab"}
+
+    @staticmethod
+    def link(path, target):
+        """
+        A relative symlink; on Windows without symlink rights, a junction (folder) or a copy (file)
+        """
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            path.rmdir()  # a junction; refuses a real folder with content
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.symlink(os.path.relpath(target, path.parent), path, target_is_directory=target.is_dir())
+        except OSError:
+            if not target.is_dir():
+                shutil.copyfile(target, path)
+            else:
+                import _winapi
+                _winapi.CreateJunction(str(target), str(path))
+
+    def main(self):
+        for folder in [ROOT, *sorted(p.parent for p in ROOT.glob("*/AGENTS.md"))]:
+            links = {rel: ROOT / target for rel, target in self.LINKS.items()}
+            if (folder / ".agents" / "skills").is_dir():
+                links[".claude/skills"] = folder / ".agents" / "skills"
+            for rel, target in links.items():
+                self.link(folder / rel, target)
+        print("Claude Code and pi linked to .agents")
 
 
 class Setup:
     def __init__(self, native):
         self.native = native
-        self.venv = ROOT / ".venv"
-
-    @property
-    def python(self):
-        for p in (self.venv / "bin" / "python", self.venv / "Scripts" / "python.exe"):
-            if p.is_file():
-                return str(p)
-        return ""
 
     @staticmethod
     def run(*args, log=None):
@@ -42,29 +76,6 @@ class Setup:
         if not shutil.which(command):
             sys.exit(f"missing: {command} ({hint})")
 
-    @staticmethod
-    def base_python():
-        """
-        A python >= 3.10 to make the venv from (this script itself runs on any python 3)
-        """
-        names = [sys.executable] + [f"python3.{m}" for m in range(14, 9, -1)] + ["python3", "python", "py"]
-        for name in names:
-            path = shutil.which(name) or (name if Path(name).is_file() else None)
-            probe = [path, "-3"] if name == "py" else [path]
-            if path and subprocess.call([*probe, "-c", "import sys; sys.exit(sys.version_info < (3, 10))"],
-                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
-                return probe
-        sys.exit("missing: python >= 3.10")
-
-    def python_env(self):
-        if not self.python:
-            self.run(*self.base_python(), "-m", "venv", str(self.venv))
-        if subprocess.call([self.python, "-m", "pip", "--version"], stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL):
-            self.run(self.python, "-m", "ensurepip", "--upgrade")
-        self.run(self.python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "-r", str(ROOT / "tools" / "requirements.txt"))
-        print("CodeScribe ready in .venv (dev/bin/loop uses it)")
-
     def pi(self):
         if shutil.which("npm") and not shutil.which("pi"):
             self.run(shutil.which("npm"), "install", "-g", "@earendil-works/pi-coding-agent")
@@ -74,18 +85,21 @@ class Setup:
     def containers(self):
         self.need("docker", "Docker Desktop, or Docker Engine on Linux")
         self.run("git", "submodule", "update", "--init", "--recursive")
-        self.run("docker", "build", "-t", "hpc-lab-translate", "code-translation")
-        self.run("docker", "build", "-t", "hpc-lab-mxp", "mxp-optimization")
-        print("images hpc-lab-translate and hpc-lab-mxp built")
+        for system in Container.IMAGES:
+            if Container(system).build():
+                sys.exit(f"failed: docker build of {system}")
+        print(f"images {' and '.join(Container.IMAGES.values())} built")
         self.run(sys.executable, "code-translation/dev/bin/oracle", log=ROOT / "setup.log")
         print("code-translation oracle passes")
-        self.run(sys.executable, "mxp-optimization/dev/bin/box", "make", "check", log=ROOT / "setup.log")
+        self.run(sys.executable, "mxp-optimization/dev/bin/container", "make", "check", log=ROOT / "setup.log")
         print("mxp-optimization tests pass")
         os.remove(ROOT / "setup.log")
 
     def main(self):
         self.need("git", "Git; on Windows Git for Windows, which also provides Git Bash")
-        self.python_env()
+        Orchestrators().main()
+        Venv().ensure()
+        print("CodeScribe ready in .venv (dev/bin/loop uses it)")
         self.pi()
         if "<your key>" in (ROOT / "config.yaml").read_text():
             print("edit config.yaml: OPENAI_COMP_APIKEY")

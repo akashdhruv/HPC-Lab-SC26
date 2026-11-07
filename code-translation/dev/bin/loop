@@ -19,7 +19,7 @@ from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parents[3] / "tools"
 sys.path.insert(0, str(TOOLS))
-from hpclab import Approvals, Config, detached, require, windows_tools
+from hpclab import Approvals, Config, Venv, detached, windows_tools
 
 BIN = Path(__file__).resolve().parent
 SYSTEM = BIN.parents[1]
@@ -49,13 +49,12 @@ class Transformation:
         print(f"loop started, log: {(self.runs / 'loop.log').relative_to(SYSTEM).as_posix()}")
 
     def loop(self, loops):
-        require("codescribe")
         from loop import Loop
 
         config = Config()
         config.export(os.environ)
-        # dev/bin first (oracle, readiness, build), then this python (the check runs `python ...`)
-        path = [str(BIN), str(Path(sys.executable).parent), *windows_tools(), os.environ["PATH"]]
+        # dev/bin first (oracle, readiness, build), then the venv's bin from Venv.activate()
+        path = [str(BIN), *windows_tools(), os.environ["PATH"]]
         os.environ["PATH"] = os.pathsep.join(path)
 
         print(f"[loop] {self.name}: {loops} loop(s) with {config.model} on {platform.system()}", flush=True)
@@ -67,6 +66,7 @@ class Transformation:
 
 
 if __name__ == "__main__":
+    Venv().activate()
     argv = sys.argv[1:]
     background = bool(argv) and argv[0] == "-b"
     argv = argv[1:] if background else argv

@@ -1,5 +1,5 @@
 # Image of code-translation: the compilers and tools the oracle needs. The repository is
-# mounted at run time by dev/bin/box; the image holds no copy of it.
+# mounted at run time by dev/bin/container; the image holds no copy of it.
 
 FROM ubuntu:24.04
 

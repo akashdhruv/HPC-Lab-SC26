@@ -1,8 +1,8 @@
-// Reads the tutorial's config.yaml and turns it into the "hpc-lab/agent" pi provider.
+// Reads the tutorial's config.yaml and turns it into the "hpclab/agent" pi provider.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-export const PROVIDER = "hpc-lab";
+export const PROVIDER = "hpclab";
 export const MODEL = "agent";
 
 export class Config {

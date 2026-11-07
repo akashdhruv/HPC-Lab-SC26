@@ -12,7 +12,7 @@ Two stages, each a contract any orchestrator can run (one skill file per stage):
   `workflows/optimize/`: the harness (`run.py`, the evaluator).
 - `tools/RAPTOR`, `tools/OpenEvolve`: submodules, built into the `hpc-lab-mxp` image (Dockerfile);
   `tools/search.sh` is the search inside a detached container.
-- `bin/box` runs a command in the image, `bin/evolve` starts an approved search,
+- `bin/container` runs a command in the image, `bin/evolve` starts an approved search,
   `bin/patch` saves app's state at a checkpoint.
 - `../experiments/<E>/<n>-<stage>/`: one instance per run, its provenance record.
 

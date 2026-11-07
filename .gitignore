@@ -10,3 +10,10 @@ mxp-optimization/app/bubble
 mxp-optimization/app/out*/
 mxp-optimization/experiments/**/results/
 setup.log
+# orchestrator folders: made by tools/setup (links into .agents) or by the orchestrator itself
+.claude/
+.pi/
+.opencode/
+.codex/
+CLAUDE.md
+CLAUDE.local.md

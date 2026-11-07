@@ -1,8 +1,0 @@
-{
-  "extensions": [
-    "../../.pi/extensions/hpc-lab"
-  ],
-  "quietStartup": true,
-  "hideThinkingBlock": true,
-  "enableSkillCommands": true
-}

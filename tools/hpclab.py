@@ -8,7 +8,7 @@ and Git Bash) with a one-line .cmd twin (for cmd.exe and PowerShell).
 
 import datetime
 import getpass
-import importlib.util
+import hashlib
 import json
 import os
 import re
@@ -21,16 +21,63 @@ ROOT = Path(__file__).resolve().parents[1]
 WINDOWS = os.name == "nt"
 
 
-def require(module):
+class Venv:
     """
-    Rerun this script under the tutorial's .venv when the current python lacks a module
+    The tutorial's .venv: made, and synced to tools/requirements.txt, on first use by any entry point
     """
-    if importlib.util.find_spec(module):
-        return
-    for python in [ROOT / ".venv" / "bin" / "python", ROOT / ".venv" / "Scripts" / "python.exe"]:
-        if python.is_file() and Path(sys.executable).resolve() != python.resolve():
-            sys.exit(subprocess.call([str(python), sys.argv[0], *sys.argv[1:]]))
-    sys.exit(f"python module '{module}' missing: run ./setup.sh")
+
+    def __init__(self):
+        self.path = ROOT / ".venv"
+        self.bin = self.path / ("Scripts" if WINDOWS else "bin")
+        self.python = self.bin / ("python.exe" if WINDOWS else "python")
+        self.requirements = ROOT / "tools" / "requirements.txt"
+        self.stamp = self.path / "requirements.sha256"
+
+    @staticmethod
+    def base_python():
+        """
+        A python >= 3.10 to make the venv from (the entry points themselves run on any python 3)
+        """
+        names = [sys.executable] + [f"python3.{m}" for m in range(14, 9, -1)] + ["python3", "python", "py"]
+        for name in names:
+            path = shutil.which(name) or (name if Path(name).is_file() else None)
+            probe = [path, "-3"] if name == "py" else [path]
+            if path and subprocess.call([*probe, "-c", "import sys; sys.exit(sys.version_info < (3, 10))"],
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+                return probe
+        sys.exit("missing: python >= 3.10")
+
+    @staticmethod
+    def run(*args):
+        if subprocess.call([str(a) for a in args], stdout=sys.stderr):
+            sys.exit(f"failed: {' '.join(map(str, args))}")
+
+    def ensure(self):
+        want = hashlib.sha256(self.requirements.read_bytes()).hexdigest()
+        if self.python.is_file() and self.stamp.is_file() and self.stamp.read_text() == want:
+            return self
+        print(f"setting up {self.path.name} ...", file=sys.stderr)
+        if not self.python.is_file():
+            self.run(*self.base_python(), "-m", "venv", self.path)
+        if subprocess.call([str(self.python), "-m", "pip", "--version"], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL):
+            self.run(self.python, "-m", "ensurepip", "--upgrade")
+        self.run(self.python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "-r", self.requirements)
+        self.stamp.write_text(want)
+        return self
+
+    def activate(self):
+        """
+        Run this script in .venv, as `activate` would: VIRTUAL_ENV and the venv's bin first on PATH
+        (so child `python` is the venv's), then rerun under the venv's python
+        """
+        self.ensure()
+        os.environ.pop("PYTHONHOME", None)
+        os.environ["VIRTUAL_ENV"] = str(self.path)
+        if os.environ["PATH"].split(os.pathsep)[0] != str(self.bin):
+            os.environ["PATH"] = os.pathsep.join([str(self.bin), os.environ["PATH"]])
+        if Path(sys.prefix).resolve() != self.path.resolve():
+            sys.exit(subprocess.call([str(self.python), sys.argv[0], *sys.argv[1:]]))
 
 
 def detached():
@@ -119,13 +166,29 @@ class Approvals:
         return entry
 
 
-class Box:
+class Container:
     """
     A system's docker image, with the tutorial mounted at /work and the system as workdir
     """
 
-    def __init__(self, image, system):
-        self.image, self.system = image, system
+    IMAGES = {"code-translation": "hpc-lab-translate", "mxp-optimization": "hpc-lab-mxp"}
+
+    def __init__(self, system):
+        self.system, self.image = system, self.IMAGES[system]
+
+    @classmethod
+    def of(cls, path):
+        """
+        The Container of the agent system that holds path
+        """
+        path = Path(path).resolve()
+        for system in cls.IMAGES:
+            if ROOT / system in (path, *path.parents):
+                return cls(system)
+        sys.exit(f"{path} is in no agent system ({', '.join(cls.IMAGES)})")
+
+    def build(self):
+        return subprocess.call(["docker", "build", "-t", self.image, str(ROOT / self.system)])
 
     def command(self, args, detach=False):
         options = ["--rm", "--init", "-w", f"/work/{self.system}"]
@@ -148,5 +211,5 @@ class Box:
         detach = bool(argv) and argv[0] == "-d"
         args = argv[1:] if detach else argv
         if not args:
-            sys.exit(f"usage: box [-d] <command ...>   (image {self.image})")
+            sys.exit(f"usage: container [-d] <command ...>   (image {self.image})")
         sys.exit(self.run(args, detach))

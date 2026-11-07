@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
-from hpclab import Box
+from hpclab import Container
 
-BOX = Box("hpc-lab-translate", "code-translation")
-sys.exit(BOX.run(["tests/check.sh", *sys.argv[1:]]))
+CONTAINER = Container.of(__file__)
+sys.exit(CONTAINER.run(["tests/check.sh", *sys.argv[1:]]))
