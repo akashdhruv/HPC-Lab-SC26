@@ -25,27 +25,41 @@ Claude Code, Codex, OpenCode, ...) on Windows, macOS or Linux. Every stage runs 
 - **Orchestrator** (yours): the interactive stages and plan modes. It reads `AGENTS.md`
   (Claude Code through `CLAUDE.md`) and the stage skills in `<system>/.agents/skills/`
   (`.claude/skills` is a symlink to them).
-- **Harnesses** (the system's): the translate loop (CodeScribe, `dev/bin/loop`) and the optimize
-  search (OpenEvolve, `dev/bin/evolve`). They call the model in `config.yaml` and enforce their
+- **Harnesses** (the system's): the translate loop (`tools/loop.py` on the CodeScribe library,
+  started by `dev/bin/loop`) and the optimize search (OpenEvolve, `dev/bin/evolve`). They call the model in `config.yaml` and enforce their
   own rules, so they behave the same whichever orchestrator, or person, starts them.
 - **Containers**: every build, run and search, one docker image per system.
 
 ## Setup
 
-Native: git, Docker, Python >= 3.10 and an orchestrator; Node.js if that is
+Native: git, Docker, Python >= 3.10 and an orchestrator (any of them); Node.js if that is
 [pi](https://pi.dev). On Windows, Git for Windows (its Git Bash runs `setup.sh`; its tools serve
 the loop), and clone with `git clone -c core.symlinks=true` (Developer Mode on) so Claude Code
 sees `.claude/skills`.
 
 ```bash
 git clone --recursive <this repo> && cd SC26-Tutorial
-./setup.sh                       # images hpc-lab-translate and hpc-lab-mxp, CodeScribe in .venv, both checks
+tools/setup                      # .venv (CodeScribe from git), images, both checks; --native skips docker
 $EDITOR config.yaml              # endpoint and key of the harnesses (and of pi)
 cd code-translation && pi        # or claude, codex, opencode; or cd mxp-optimization
 ```
 
 Every entry point (`tools/*`, `<system>/dev/bin/*`) is Python and is called by path, the same in
-bash, Git Bash, cmd.exe and PowerShell.
+bash, Git Bash, cmd.exe and PowerShell (`./setup.sh` is the same as `tools/setup`). Python
+packages go only into the tutorial's `.venv`: `tools/requirements.txt` pins CodeScribe to a commit
+of its git repo, and entry points that need it rerun themselves under `.venv`.
+
+## The translate loop, from any orchestrator
+
+    orchestrator (pi, claude, codex, opencode)  ->  dev/bin/loop -b <name>  ->  .venv python
+        ->  tools/loop.py (author -> check -> review)  ->  codescribe.lib (Agent, tools, telemetry)
+
+`tools/loop.py` is the lab's own loop, tracked here: the policy of `loop.toml` (protected files,
+bash allowlist, reviewer rules), the oracle after every author session and the stop rule are this
+repo's code; CodeScribe supplies the agent, its bounded tools and the model client. Each run is
+recorded in `dev/transformations/<name>/runs/<run_id>/`. The orchestrator only launches it:
+`/loop <name>` in pi, Claude Code and OpenCode (`.pi/extensions`, `.claude/commands`,
+`.opencode/command`), the translate skill's run mode in Codex, or the shell line itself.
 
 ## A stage, in any orchestrator
 
@@ -69,7 +83,8 @@ and Claude Code (`.claude/settings.json`) also block the agent from approving.
 
 ```
 config.yaml                            endpoint of the harnesses (and of pi)
-tools/                                 approve, approved, box; hpclab.py (shared helpers)
+tools/                                 setup, approve, approved, box; hpclab.py (shared helpers)
+tools/loop.py, tools/requirements.txt  the translate loop; the pinned .venv packages (CodeScribe)
 .pi/extensions/hpc-lab/                pi adapter: provider, compact output, approvals guard, commands
 
 code-translation/

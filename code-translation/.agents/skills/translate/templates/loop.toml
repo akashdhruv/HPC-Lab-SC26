@@ -1,4 +1,4 @@
-# Task of <name> for the CodeScribe harness: dev/bin/loop <name>.
+# Task of <name> for the lab's loop (tools/loop.py): dev/bin/loop <name>.
 
 [tools]
 bash = ["readiness", "oracle", "build", "rm", "cat", "diff"]

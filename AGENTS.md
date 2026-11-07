@@ -21,7 +21,8 @@ autonomous loop (translate) or an evolutionary search (optimize).
 - Entry points: `tools/*` and `<system>/dev/bin/*`, plain Python. Call them by path
   (`dev/bin/oracle`); the same name works in bash, Git Bash, cmd.exe and PowerShell (a `.cmd`
   twin). Builds and runs happen in each system's docker image; agents and model calls run natively.
-- Model endpoint of the harnesses (CodeScribe loop, OpenEvolve): `config.yaml`.
+- Model endpoint of the harnesses (the loop `tools/loop.py`, OpenEvolve): `config.yaml`.
+- Setup: `tools/setup` (`--native` skips docker); python packages only in `.venv`.
 
 ## Rules
 

@@ -1,13 +1,13 @@
 ---
 name: translate
-description: Translate the Fortran of app/ to C++. Plan mode writes a transformation (spec, plan, loop.toml) into dev/transformations/<name>/ for approval; run mode starts the CodeScribe author/check/review loop, verifies the result and asks for acceptance. Use for anything about planning, running or checking a translation.
+description: Translate the Fortran of app/ to C++. Plan mode writes a transformation (spec, plan, loop.toml) into dev/transformations/<name>/ for approval; run mode starts the lab's author/check/review loop, verifies the result and asks for acceptance. Use for anything about planning, running or checking a translation.
 ---
 
 # translate (autonomous loop)
 
 The stage contract of code-translation. A transformation is a folder `dev/transformations/<name>/`
-made from `templates/` (next to this file). `dev/bin/loop` runs CodeScribe's author -> check ->
-review harness on its `loop.toml`: one unit per author session, the oracle after every session,
+made from `templates/` (next to this file). `dev/bin/loop` runs the lab's author -> check ->
+review loop (`../tools/loop.py`, on the CodeScribe library in `.venv`) on its `loop.toml`: one unit per author session, the oracle after every session,
 stop when the group is complete, the oracle passes and the review is clean. The harness calls
 the model in `config.yaml` and enforces `loop.toml` itself, so the loop is the same under any
 orchestrator. Commands run from `code-translation/`.
@@ -53,4 +53,5 @@ orchestrator. Commands run from `code-translation/`.
 
 `dev/transformations/<name>/` keeps desired_spec.md, current_plan.md, loop.toml,
 approvals.toml and agent_log.md; `runs/<run_id>/` keeps the harness's record of each loop run
-(run.toml with model, tokens and stop reason, rules.toml, metadata/, host.toml) and `runs/loop.log`.
+(run.toml with model, CodeScribe version, tokens, scores and stop reason, rules.toml,
+review_<loop>.toml, events/, metadata/, host.toml) and `runs/loop.log`.

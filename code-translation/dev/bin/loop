@@ -1,6 +1,7 @@
 #!/bin/sh
 ''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
-# Run a transformation with CodeScribe's author -> check -> review loop (codescribe.lib.prompt_loop).
+# Run a transformation with the lab's author -> check -> review loop (tools/loop.py, built on
+# the CodeScribe library in .venv).
 #
 #   dev/bin/loop [-b] <name> [loops]
 #
@@ -8,15 +9,16 @@
 # (agent.loop_model, else agent.model), enforces loop.toml (bash allowlist, protected files),
 # runs [check] after every author session and stops on a passing check and a clean review.
 # So any orchestrator, or the scientist, starts it the same way and gets the same loop.
-# -b runs it in the background; output goes to dev/transformations/<name>/runs/loop.log.
+# -b runs it in the background; output goes to dev/transformations/<name>/runs/loop.log, the
+# record of each run to dev/transformations/<name>/runs/<run_id>/.
 import os
 import platform
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+TOOLS = Path(__file__).resolve().parents[3] / "tools"
+sys.path.insert(0, str(TOOLS))
 from hpclab import Approvals, Config, detached, require, windows_tools
 
 BIN = Path(__file__).resolve().parent
@@ -48,7 +50,7 @@ class Transformation:
 
     def loop(self, loops):
         require("codescribe")
-        from codescribe import lib
+        from loop import Loop
 
         config = Config()
         config.export(os.environ)
@@ -57,29 +59,11 @@ class Transformation:
         os.environ["PATH"] = os.pathsep.join(path)
 
         print(f"[loop] {self.name}: {loops} loop(s) with {config.model} on {platform.system()}", flush=True)
-        result = lib.prompt_loop(
-            task_file=self.path / "loop.toml",
-            model="oaic-" + config.model,
-            agent_loops=loops,
-            verbose=True,
-            workdir=SYSTEM,
-            reason=str(config.get("agent.reasoning")).lower() == "true",
-        )
-        print(f"[loop] {result}\n[loop] record: {self.record().relative_to(SYSTEM).as_posix()}")
-
-    def record(self):
-        """
-        Keep the harness's run record (run.toml, rules, metadata/) with the transformation
-        """
-        import toml
-
-        source = SYSTEM / ".codescribe" / "loop"
-        run = toml.load(source / "run.toml")
-        target = self.runs / run["run_id"]
-        shutil.copytree(source, target, dirs_exist_ok=True)
+        run = Loop(self.path, SYSTEM, "oaic-" + config.model,
+                   reasoning=str(config.get("agent.reasoning")).lower() == "true").run(loops)
         host = {"os": platform.platform(), "python": platform.python_version()}
-        (target / "host.toml").write_text(toml.dumps(host))
-        return target
+        (run.record / "host.toml").write_text("".join(f'{k} = "{v}"\n' for k, v in host.items()))
+        print(f"[loop] {run.stop_reason}, record: {run.record.relative_to(SYSTEM).as_posix()}")
 
 
 if __name__ == "__main__":

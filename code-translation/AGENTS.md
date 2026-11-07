@@ -8,7 +8,9 @@ Agents run natively; everything that builds or runs the app runs in the `hpc-lab
 container through `dev/bin/`: `oracle` (tests/check.sh), `readiness` (dev/tools/index.py),
 `build` (make -C app), `box <command>`. Never call make, gfortran or g++ directly.
 
-- `dev/bin/loop [-b] <name>`: the autonomous loop (CodeScribe's harness, model from config.yaml).
+- `dev/bin/loop [-b] <name>`: the autonomous loop (`../tools/loop.py` on CodeScribe in `.venv`,
+  model from config.yaml).
 - `dev/bin/status [name]`: approvals, groups, agent log, loop runs.
 - `dev/transformations/<name>/`: one folder per transformation, its provenance record.
-- pi commands (shortcuts for the lines above): /readiness /check /approve /loop /status.
+- Commands (shortcuts for the lines above): pi /readiness /check /approve /loop /status;
+  Claude Code and OpenCode /loop /status.

@@ -1,0 +1,97 @@
+#!/bin/sh
+''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
+# One-time setup on Windows, macOS or Linux; safe to rerun. Stdlib only.
+#
+#   tools/setup [--native]
+#
+# Native: .venv with tools/requirements.txt (CodeScribe from its git repo, for dev/bin/loop),
+# and pi if Node.js is here. Then (unless --native) the submodules, the docker images
+# hpc-lab-translate and hpc-lab-mxp, and both checks.
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class Setup:
+    def __init__(self, native):
+        self.native = native
+        self.venv = ROOT / ".venv"
+
+    @property
+    def python(self):
+        for p in (self.venv / "bin" / "python", self.venv / "Scripts" / "python.exe"):
+            if p.is_file():
+                return str(p)
+        return ""
+
+    @staticmethod
+    def run(*args, log=None):
+        out = open(log, "w") if log else None
+        code = subprocess.call(list(args), cwd=ROOT, stdout=out, stderr=subprocess.STDOUT if out else None)
+        if code:
+            if log:
+                print("".join(Path(log).read_text().splitlines(True)[-5:]), end="")
+            sys.exit(f"failed: {' '.join(map(str, args))}")
+
+    @staticmethod
+    def need(command, hint):
+        if not shutil.which(command):
+            sys.exit(f"missing: {command} ({hint})")
+
+    @staticmethod
+    def base_python():
+        """
+        A python >= 3.10 to make the venv from (this script itself runs on any python 3)
+        """
+        names = [sys.executable] + [f"python3.{m}" for m in range(14, 9, -1)] + ["python3", "python", "py"]
+        for name in names:
+            path = shutil.which(name) or (name if Path(name).is_file() else None)
+            probe = [path, "-3"] if name == "py" else [path]
+            if path and subprocess.call([*probe, "-c", "import sys; sys.exit(sys.version_info < (3, 10))"],
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+                return probe
+        sys.exit("missing: python >= 3.10")
+
+    def python_env(self):
+        if not self.python:
+            self.run(*self.base_python(), "-m", "venv", str(self.venv))
+        if subprocess.call([self.python, "-m", "pip", "--version"], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL):
+            self.run(self.python, "-m", "ensurepip", "--upgrade")
+        self.run(self.python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "-r", str(ROOT / "tools" / "requirements.txt"))
+        print("CodeScribe ready in .venv (dev/bin/loop uses it)")
+
+    def pi(self):
+        if shutil.which("npm") and not shutil.which("pi"):
+            self.run(shutil.which("npm"), "install", "-g", "@earendil-works/pi-coding-agent")
+        if shutil.which("pi"):
+            print("pi ready")
+
+    def containers(self):
+        self.need("docker", "Docker Desktop, or Docker Engine on Linux")
+        self.run("git", "submodule", "update", "--init", "--recursive")
+        self.run("docker", "build", "-t", "hpc-lab-translate", "code-translation")
+        self.run("docker", "build", "-t", "hpc-lab-mxp", "mxp-optimization")
+        print("images hpc-lab-translate and hpc-lab-mxp built")
+        self.run(sys.executable, "code-translation/dev/bin/oracle", log=ROOT / "setup.log")
+        print("code-translation oracle passes")
+        self.run(sys.executable, "mxp-optimization/dev/bin/box", "make", "check", log=ROOT / "setup.log")
+        print("mxp-optimization tests pass")
+        os.remove(ROOT / "setup.log")
+
+    def main(self):
+        self.need("git", "Git; on Windows Git for Windows, which also provides Git Bash")
+        self.python_env()
+        self.pi()
+        if "<your key>" in (ROOT / "config.yaml").read_text():
+            print("edit config.yaml: OPENAI_COMP_APIKEY")
+        if not self.native:
+            self.containers()
+
+
+if __name__ == "__main__":
+    Setup("--native" in sys.argv[1:]).main()
