@@ -1,0 +1,6 @@
+[submodule "mxp-optimization/dev/tools/RAPTOR"]
+	path = mxp-optimization/dev/tools/RAPTOR
+	url = https://github.com/RIKEN-RCCS/RAPTOR.git
+[submodule "mxp-optimization/dev/tools/OpenEvolve"]
+	path = mxp-optimization/dev/tools/OpenEvolve
+	url = https://github.com/algorithmicsuperintelligence/openevolve.git

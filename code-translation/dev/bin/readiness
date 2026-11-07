@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#
+# Which Fortran units can be translated now, computed in the container.
+
+exec "$(dirname "$0")/box" python3 dev/tools/index.py "$@"

@@ -1,0 +1,28 @@
+# Task of <name> for either runner: dev/tools/pi-loop.sh or dev/tools/codescribe-loop.sh.
+
+[tools]
+bash = ["readiness", "oracle", "build", "rm", "cat", "diff"]
+protect = [
+  "dev/transformations/<name>/desired_spec.md",
+  "dev/transformations/<name>/current_plan.md",
+  "dev/transformations/<name>/approvals.toml",
+  "tests/*",
+  "app/Makefile",
+  "app/include/*",
+]
+writable = ["dev/transformations/<name>/agent_log.md"]
+
+[check]
+command = "bash dev/bin/oracle"
+timeout = 300
+
+[[chat.user]]
+content = '''
+Work on the transformation in dev/transformations/<name>/ from code-translation/: read
+current_plan.md, then desired_spec.md, agent_log.md and approvals.toml. Do one author
+session of the Plan: settle one unit, or fix what the review reports.
+
+The Spec, Plan and approvals are human-owned and protected; agent_log.md is the only file of
+that folder you may write. On conflict the Spec governs. Commands (they run in the container):
+`oracle`, `readiness`, `build`. One plain command per bash call.
+'''

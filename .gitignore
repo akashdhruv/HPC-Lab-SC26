@@ -1,0 +1,12 @@
+DEMO.md
+.venv/
+__pycache__/
+.codescribe/
+code-translation/app/build/
+code-translation/app/rd2d
+code-translation/dev/transformations/*/runs/
+mxp-optimization/app/build/
+mxp-optimization/app/bubble
+mxp-optimization/app/out*/
+mxp-optimization/experiments/**/results/
+setup.log

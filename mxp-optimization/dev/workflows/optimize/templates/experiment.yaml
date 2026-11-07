@@ -1,0 +1,39 @@
+# <R>: the search. Rules here == rules in evaluator.py. Endpoint and models: config.yaml.
+
+title: "WENO5 advection kernel, accurate under bf16 emulation (RAPTOR)"
+max_programs: 10
+timeout: 300
+
+# Per-run override of config.yaml evolve:
+# openevolve: {models: ["<model>"], max_tokens: 16000, reasoning_effort: low}
+
+problem: |
+  The EVOLVE-BLOCK in app/src/advect.cpp holds wenoFaceValue and advectWeno: the WENO5
+  advection term of a 2D level set (Flash-X Stencils_advectWeno, flux-difference form, MAC face
+  velocities). RAPTOR rounds every floating-point operation of advectWeno and its callees to
+  bf16 (8 exponent bits, 7 mantissa bits, about 2-3 decimal digits). Make the kernel as accurate
+  as possible under that rounding. The scheme must not change, only how its arithmetic is
+  written.
+
+  EVALUATION
+  - Build with `make RAPTOR=1`; run `mpirun -n 1 ./bubble params/bubble.ini nx=128 ny=128
+    max_steps=100 plot_interval=0 precision=bf16 outdir=<out>`: 100 steps on 128x128, the
+    kernel in bf16, everything else and an FP64 shadow run in double.
+  - score = -log10(RMS over steps of err_rms), the RMS over cells of |phi - phi_shadow|.
+    Higher is better. The seed scores <S>.
+
+  GUARDS (score null if failed)
+  - EQUIVALENCE_FAILED: the same code run in fp64 must reproduce the seed's fp64 run (area,
+    mass, phi_min, phi_max within 1e-10). Any change of the scheme fails.
+
+  NOT ALLOWED (score null)
+  - New or changed types: every floating-point value stays double (no float, auto, typedef,
+    using, struct, class, template).
+  - Library calls other than std::min, std::max, std::abs, std::fabs: they run untruncated.
+  - Preprocessor directives; bit-level tricks (reinterpret_cast, memcpy, union).
+  - Changing code outside the EVOLVE-BLOCK, or the signatures of wenoFaceValue and advectWeno.
+
+  WHAT HELPS
+  - Exact rewrites in real arithmetic: re-associating or factoring sums, working with
+    differences of nearby values, exact power-of-two scaling, compensated sums.
+  - Keep a use of sqr (defined outside the block) or the build fails on an unused function.

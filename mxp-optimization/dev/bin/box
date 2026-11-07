@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#
+# Run a command in the sc26-mxp image, from mxp-optimization/.
+#
+#   dev/bin/box make check
+#   dev/bin/box -d dev/tools/search.sh <R>      (detached: the container sc26-mxp-optimization)
+
+exec "$(dirname "$0")/../../../tools/box" sc26-mxp mxp-optimization "$@"

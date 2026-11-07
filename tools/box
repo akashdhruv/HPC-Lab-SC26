@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#
+# Run a command in an agent system's docker image, with the tutorial mounted at /work.
+# Works from Linux, macOS and Git Bash on Windows.
+#
+#   tools/box <image> <system> [-d] <command ...>
+#
+# -d runs it detached, as the container sc26-<system> (stop it with docker stop).
+
+set -euo pipefail
+
+image="$1"
+system="$2"
+shift 2
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+options=(--rm --init -w "/work/$system")
+
+if [ -n "${MAX_PROGRAMS:-}" ]; then
+    options+=(-e "MAX_PROGRAMS=$MAX_PROGRAMS")
+fi
+
+if [ "${1:-}" = "-d" ]; then
+    options+=(-d --name "sc26-$system")
+    shift
+fi
+
+case "$(uname -s)" in
+    MINGW* | MSYS* | CYGWIN*)
+        export MSYS_NO_PATHCONV=1
+        options+=(-v "$(cd "$root" && pwd -W):/work")
+        ;;
+    *)
+        options+=(-v "$root:/work" --user "$(id -u):$(id -g)")
+        ;;
+esac
+
+exec docker run "${options[@]}" "$image" "$@"

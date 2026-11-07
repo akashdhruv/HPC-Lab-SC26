@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#
+# Build app/ in the container.
+
+exec "$(dirname "$0")/box" make -C app "$@"

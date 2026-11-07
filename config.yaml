@@ -1,0 +1,23 @@
+# Model endpoint of the SC26 agent systems: any OpenAI-compatible API.
+#
+# agent:  the model of pi (both systems) and of the CodeScribe loop (loop_model overrides it).
+# evolve: the models OpenEvolve samples candidates from (mxp-optimization).
+# A value may read an environment variable: "${NAME}".
+
+OPENAI_COMP_BASEURL: ""
+OPENAI_COMP_APIKEY: ""
+OPENAI_COMP_PROVIDER: "openai"
+
+agent:
+  model: "gpt56sol"
+  loop_model: ""
+  reasoning: false
+  context_window: 272000
+  max_tokens: 16384
+  supports_developer_role: false
+  supports_reasoning_effort: false
+
+evolve:
+  models: ["gpt56terra", "gpt56sol"]
+  max_tokens: 16000
+  timeout: 300

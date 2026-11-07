@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#
+# Run a command in the sc26-translate image, from code-translation/.
+#
+#   dev/bin/box make -C app
+
+exec "$(dirname "$0")/../../../tools/box" sc26-translate code-translation "$@"

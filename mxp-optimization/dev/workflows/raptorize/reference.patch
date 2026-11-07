@@ -1,0 +1,238 @@
+diff --git a/mxp-optimization/app/Makefile b/mxp-optimization/app/Makefile
+index fade97f..feee6dd 100644
+--- a/mxp-optimization/app/Makefile
++++ b/mxp-optimization/app/Makefile
+@@ -28,6 +28,14 @@ TESTBINS := $(patsubst $(TESTDIR)/%.cpp,$(OBJDIR)/%,$(TESTSRCS))
+ 
+ DEPS     := $(OBJS:.o=.d) $(TESTBINS:=.d)
+ 
++# RAPTOR-BEGIN: advect.cpp through the RAPTOR plugin (RAPTOR* from the root Makefile)
++ifeq ($(RAPTOR),1)
++$(OBJDIR)/advect.o: CXX := $(RAPTOR_CXX)
++$(OBJDIR)/advect.o: CXXFLAGS += $(RAPTOR_CXXFLAGS) $(shell mpicxx --showme:compile)
++LDLIBS += $(RAPTOR_LDLIBS)
++endif
++# RAPTOR-END
++
+ .PHONY: all clean check debug tests
+ 
+ all: $(BIN)
+diff --git a/mxp-optimization/app/src/advect.cpp b/mxp-optimization/app/src/advect.cpp
+index 0ebf25d..adde800 100644
+--- a/mxp-optimization/app/src/advect.cpp
++++ b/mxp-optimization/app/src/advect.cpp
+@@ -4,6 +4,7 @@
+ #include "advect.h"
+ 
+ #include <cstddef>
++#include <stdexcept>  // RAPTOR
+ 
+ namespace {
+ 
+@@ -13,6 +14,8 @@ inline double sqr(double x) { return x * x; }
+ 
+ }  // namespace
+ 
++// RAPTOR-BEGIN: EVOLVE-BLOCK, the FP64 kernel that RAPTOR truncates
++// EVOLVE-BLOCK-START
+ double wenoFaceValue(double s1, double s2, double s3, double s4, double s5, bool positive) {
+     // Smoothness indicators (identical in both branches).
+     const double rIS1 = (13.0 / 12.0) * sqr(s1 - 2.0 * s2 + s3) +
+@@ -118,3 +121,24 @@ void advectWeno(const Grid& g, const std::vector<double>& phi, const std::vector
+         }
+     }
+ }
++// EVOLVE-BLOCK-END
++// RAPTOR-END
++
++// RAPTOR-BEGIN: advectWeno at precision m (RAPTOR emulates fp32 and bf16)
++void advectWenoAt(Precision m, const Grid& g, const std::vector<double>& phi,
++                  const std::vector<double>& u, const std::vector<double>& v,
++                  std::vector<double>& rhs) {
++    if (m == Precision::kFp64) {
++        advectWeno(g, phi, u, v, rhs);
++#ifdef BUBBLE_RAPTOR
++    } else if (m == Precision::kFp32) {
++        // Arguments: function, from fp64, to MPFR (1), exponent bits, mantissa bits.
++        __raptor_truncate_op_func(advectWeno, 64, 1, 8, 23)(g, phi, u, v, rhs);
++    } else if (m == Precision::kBf16) {
++        __raptor_truncate_op_func(advectWeno, 64, 1, 8, 7)(g, phi, u, v, rhs);
++#endif
++    } else {
++        throw std::invalid_argument("this precision needs a RAPTOR=1 build");
++    }
++}
++// RAPTOR-END
+diff --git a/mxp-optimization/app/src/advect.h b/mxp-optimization/app/src/advect.h
+index 3e7f17f..cf26b5c 100644
+--- a/mxp-optimization/app/src/advect.h
++++ b/mxp-optimization/app/src/advect.h
+@@ -26,4 +26,10 @@ double wenoFaceValue(double s1, double s2, double s3, double s4, double s5, bool
+ void advectWeno(const Grid& g, const std::vector<double>& phi, const std::vector<double>& u,
+                 const std::vector<double>& v, std::vector<double>& rhs);
+ 
++// RAPTOR-BEGIN: advectWeno at precision m
++void advectWenoAt(Precision m, const Grid& g, const std::vector<double>& phi,
++                  const std::vector<double>& u, const std::vector<double>& v,
++                  std::vector<double>& rhs);
++// RAPTOR-END
++
+ #endif  // BUBBLE_ADVECT_H
+diff --git a/mxp-optimization/app/src/driver.cpp b/mxp-optimization/app/src/driver.cpp
+index dac7446..42f59d5 100644
+--- a/mxp-optimization/app/src/driver.cpp
++++ b/mxp-optimization/app/src/driver.cpp
+@@ -35,7 +35,7 @@ long advanceOneStep(const Grid& g, const Params& p, std::vector<double>& phi,
+ 
+     // WENO5 accumulates into rhs (the Fortran does), so zero it first.
+     std::fill(rhs.begin(), rhs.end(), 0.0);
+-    advectWeno(g, phi, u, v, rhs);
++    advectWenoAt(p.precision, g, phi, u, v, rhs);  // RAPTOR: was advectWeno(g, phi, u, v, rhs);
+ 
+     // Forward Euler (Stencils_integrateEuler, no source term).
+     for (int j = 0; j < g.ny(); ++j) {
+@@ -85,6 +85,14 @@ bool runSimulation(const Grid& g, const Params& p, std::vector<double>& dfun, Ru
+     if (!appendHistory(g, p, step, time, 0.0, diag, err)) return false;
+     ++summary.history_rows;
+ 
++    // RAPTOR-BEGIN: fp64 shadow, a separate run from the initial state
++    std::vector<double> shadow = dfun;
++    std::vector<double> rhsShadow = g.allocate();
++    std::vector<double> phiOrigShadow = g.allocate();
++    Params fp64 = p;
++    fp64.precision = Precision::kFp64;
++    // RAPTOR-END
++
+     const double tEps = 1.0e-12 * p.tmax;
+     while (time < p.tmax - tEps) {
+         if (p.max_steps > 0 && step >= p.max_steps) break;
+@@ -97,6 +105,7 @@ bool runSimulation(const Grid& g, const Params& p, std::vector<double>& dfun, Ru
+ 
+         const long flips = advanceOneStep(g, p, dfun, u, v, dt, rhs, phiOrig);
+         summary.sign_flips_total += flips;
++        advanceOneStep(g, fp64, shadow, u, v, dt, rhsShadow, phiOrigShadow);  // RAPTOR
+ 
+         time += dt;
+         ++step;
+@@ -109,6 +118,7 @@ bool runSimulation(const Grid& g, const Params& p, std::vector<double>& dfun, Ru
+ 
+         if (wantHist || wantPlot) {
+             diag = computeDiagnostics(g, dfun, u, v, flips);
++            errorsVsShadow(g, dfun, shadow, diag);  // RAPTOR
+             if (diag.max_divergence > summary.max_divergence) {
+                 summary.max_divergence = diag.max_divergence;
+             }
+diff --git a/mxp-optimization/app/src/io.cpp b/mxp-optimization/app/src/io.cpp
+index 99c4b5b..e082c57 100644
+--- a/mxp-optimization/app/src/io.cpp
++++ b/mxp-optimization/app/src/io.cpp
+@@ -96,6 +96,24 @@ std::string pvtiName(int step) {
+     return std::string(buf);
+ }
+ 
++// RAPTOR-BEGIN: errors vs the fp64 shadow
++void errorsVsShadow(const Grid& g, const std::vector<double>& dfun,
++                    const std::vector<double>& shadow, Diagnostics& d) {
++    double local[2] = {0.0, 0.0};  // sum of squares, max
++    for (int j = 0; j < g.ny(); ++j) {
++        for (int i = 0; i < g.nx(); ++i) {
++            const double e = std::fabs(dfun[g.index(i, j)] - shadow[g.index(i, j)]);
++            local[0] += e * e;
++            if (e > local[1]) local[1] = e;
++        }
++    }
++    double sum = 0.0;
++    MPI_Allreduce(&local[0], &sum, 1, MPI_DOUBLE, MPI_SUM, g.comm());
++    MPI_Allreduce(&local[1], &d.err_max, 1, MPI_DOUBLE, MPI_MAX, g.comm());
++    d.err_rms = std::sqrt(sum / (double(g.nxGlobal()) * g.nyGlobal()));
++}
++// RAPTOR-END
++
+ bool ensureOutputDir(const Grid& g, const Params& p, std::string& err) {
+     int ok = 1;
+     if (g.rank() == 0) {
+@@ -123,7 +141,7 @@ bool writeHistoryHeader(const Grid& g, const Params& p, std::string& err) {
+         if (!f) {
+             ok = 0;
+         } else {
+-            f << "step,time,dt,area,mass,phi_min,phi_max,max_divergence,sign_flips\n";
++            f << "step,time,dt,area,mass,phi_min,phi_max,max_divergence,sign_flips,err_rms,err_max\n";  // RAPTOR: was f << "step,time,dt,area,mass,phi_min,phi_max,max_divergence,sign_flips\n";
+             f.flush();
+             if (!f) ok = 0;
+         }
+@@ -160,7 +178,11 @@ bool appendHistory(const Grid& g, const Params& p, int step, double time, double
+             writeDouble(os, d.phi_max);
+             os << ',';
+             writeDouble(os, d.max_divergence);
+-            os << ',' << d.sign_flips << '\n';
++            os << ',' << d.sign_flips << ',';  // RAPTOR: was os << ',' << d.sign_flips << '\n';
++            writeDouble(os, d.err_rms);  // RAPTOR
++            os << ',';                   // RAPTOR
++            writeDouble(os, d.err_max);  // RAPTOR
++            os << '\n';                  // RAPTOR
+             f << os.str();
+             f.flush();
+             if (!f) ok = 0;
+diff --git a/mxp-optimization/app/src/io.h b/mxp-optimization/app/src/io.h
+index fd86add..eb82d7f 100644
+--- a/mxp-optimization/app/src/io.h
++++ b/mxp-optimization/app/src/io.h
+@@ -32,6 +32,8 @@ struct Diagnostics {
+     double phi_max = 0.0;
+     double max_divergence = 0.0;   // invariant 6
+     long sign_flips = 0;           // redistance warning counter of the last step
++    double err_rms = 0.0;          // RAPTOR: rms |dfun - shadow| over owned cells
++    double err_max = 0.0;          // RAPTOR: max |dfun - shadow|
+ };
+ 
+ // Smoothed Heaviside with half-width `eps` (Spec: 1.5 cells):
+@@ -48,6 +50,11 @@ Diagnostics computeDiagnostics(const Grid& g, const std::vector<double>& dfun,
+                                const std::vector<double>& u, const std::vector<double>& v,
+                                long signFlips);
+ 
++// RAPTOR-BEGIN: errors of `dfun` vs the fp64 shadow, reduced over ranks, into d
++void errorsVsShadow(const Grid& g, const std::vector<double>& dfun,
++                    const std::vector<double>& shadow, Diagnostics& d);
++// RAPTOR-END
++
+ // Create `p.outdir` if it does not exist (rank 0 creates, all ranks wait).
+ // Returns false with `err` filled if it cannot be created.
+ bool ensureOutputDir(const Grid& g, const Params& p, std::string& err);
+diff --git a/mxp-optimization/app/src/params.h b/mxp-optimization/app/src/params.h
+index 2865465..81fd7a4 100644
+--- a/mxp-optimization/app/src/params.h
++++ b/mxp-optimization/app/src/params.h
+@@ -14,6 +14,10 @@
+ // WENO5 reaches i-3 .. i+3.  Fewer guard cells is a silent correctness bug.
+ constexpr int NGUARD = 3;
+ 
++// RAPTOR-BEGIN: precision modes of advectWeno (here: advect.h includes this file via grid.h)
++enum class Precision { kFp64, kFp32, kBf16 };
++// RAPTOR-END
++
+ struct Params {
+     // mesh
+     int nx = 128;             // interior cells in x (global)
+@@ -47,6 +51,7 @@ struct Params {
+     int plot_interval = 20;   // steps between .vti/.pvti dumps (<=0 disables)
+     int hist_interval = 1;    // steps between history.csv rows
+     int verbosity = 1;
++    Precision precision = Precision::kFp64;  // RAPTOR
+ };
+ 
+ namespace paramsdetail {
+@@ -113,6 +118,14 @@ inline bool setParam(const std::string& key, const std::string& val, Params& p,
+     else if (key == "plot_interval") ok = paramsdetail::toInt(val, p.plot_interval);
+     else if (key == "hist_interval") ok = paramsdetail::toInt(val, p.hist_interval);
+     else if (key == "verbosity") ok = paramsdetail::toInt(val, p.verbosity);
++    // RAPTOR-BEGIN: precision = fp64 | fp32 | bf16
++    else if (key == "precision") {
++        if (val == "fp64") p.precision = Precision::kFp64;
++        else if (val == "fp32") p.precision = Precision::kFp32;
++        else if (val == "bf16") p.precision = Precision::kBf16;
++        else ok = false;
++    }
++    // RAPTOR-END
+     else { known = false; return false; }
+     return ok;
+ }

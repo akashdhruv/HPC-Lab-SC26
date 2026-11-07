@@ -1,0 +1,8 @@
+{
+  "extensions": [
+    "../../.pi/extensions/sc26"
+  ],
+  "quietStartup": true,
+  "hideThinkingBlock": true,
+  "enableSkillCommands": true
+}

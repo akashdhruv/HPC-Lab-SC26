@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#
+# The oracle, in the container: clean build, one run, compare with the golden output.
+
+exec "$(dirname "$0")/box" tests/check.sh "$@"
