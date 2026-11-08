@@ -141,12 +141,12 @@ class Approvals:
     def __init__(self, instance):
         self.instance = Path(instance)
         self.path = self.instance / "approvals.toml"
-        if not self.path.is_file():
-            sys.exit(f"no {self.path}")
+        if not self.instance.is_dir():
+            sys.exit(f"no {self.instance}")
 
     def has(self, item):
         pattern = re.compile(r"^item\s*=\s*" + re.escape(json.dumps(item)) + r"\s*$", re.M)
-        return bool(pattern.search(self.path.read_text()))
+        return self.path.is_file() and bool(pattern.search(self.path.read_text()))
 
     def require(self, item):
         if not self.has(item):

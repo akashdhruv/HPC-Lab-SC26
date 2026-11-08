@@ -1,15 +1,25 @@
 # code-translation
 
 An agent system (Translation thrust): Fortran -> C++ for `app/`, rd2d, a Gray-Scott
-reaction-diffusion mini-app of 13 Fortran units. Stage: translate (skill
-`.agents/skills/translate/SKILL.md`). The interface an application must meet: `dev/app.md`.
+reaction-diffusion mini-app of 13 Fortran units. Stage: translate, an autonomous loop. The
+interface an application must meet: `dev/app.md`.
 
 Agents run natively; everything that builds or runs the app runs in the `hpc-lab-translate`
 container through `dev/bin/`: `oracle` (tests/check.sh), `readiness` (dev/tools/index.py),
 `build` (make -C app), `container <command>`. Never call make, gfortran or g++ directly.
 
-- `dev/bin/loop [-b] <name>`: the autonomous loop (`../tools/loop.py` on CodeScribe in `.venv`,
-  model from config.yaml).
-- `dev/bin/status [name]`: approvals, groups, agent log, loop runs.
-- `dev/transformations/<name>/`: one folder per transformation, its provenance record.
-- Skills: `translate` (the stage), `csloop` (start the loop), `csloop-status`.
+The transformation is checked in: `dev/transformations/translate/` (desired_spec.md,
+current_plan.md, loop.toml: 13 units in 4 groups). Its plan is the stage's plan mode, already
+written; the scientist reviews and approves it.
+
+    approve the plan  ->  csloop  ->  csloop-status (verify)  ->  accept the group  ->  csloop ...
+    scientist            agent        agent                      scientist
+
+- `../tools/approve dev/transformations/translate plan`, then `"Group <k>"`: scientist only.
+- `dev/bin/loop [-b] translate`: the autonomous loop (`../tools/loop.py` on CodeScribe in
+  `.venv`, model from config.yaml); it refuses an unapproved plan and stops at the end of a group.
+- `dev/bin/status [translate]`: approvals, groups, agent log, loop runs.
+- Skills: `csloop` (start the loop), `csloop-status` (report, and verify a stopped loop).
+- The loop writes `app/src` and `agent_log.md`; the harness reverts any change to the spec,
+  plan, approvals, `loop.toml`, `tests/`, `app/Makefile` and `app/include/`. Each run is
+  recorded in `dev/transformations/translate/runs/<run_id>/`. `git checkout app/` starts over.

@@ -34,7 +34,7 @@ Claude Code, Codex, OpenCode, ...) on Windows, macOS or Linux. Every stage runs 
 ## Setup
 
 Native: git, Docker, Python >= 3.10 and an orchestrator (any of them); Node.js if that is
-[pi](https://pi.dev). On Windows, Git for Windows (its Git Bash runs `setup.sh`; its tools serve
+[pi](https://pi.dev). On Windows, Git for Windows (its Git Bash runs `tools/setup`; its tools serve
 the loop).
 
 ```bash
@@ -45,7 +45,7 @@ cd code-translation && pi        # or claude, codex, opencode; or cd mxp-optimiz
 ```
 
 Every entry point (`tools/*`, `<system>/dev/bin/*`) is Python and is called by path, the same in
-bash, Git Bash, cmd.exe and PowerShell (`./setup.sh` is the same as `tools/setup`). Python
+bash, Git Bash, cmd.exe and PowerShell. Python
 packages go only into the tutorial's `.venv`: `tools/requirements.txt` pins CodeScribe to a commit
 of its git repo; entry points that need it make `.venv` on first use and rerun under it, and
 pi and Claude Code sessions put it first on PATH.
@@ -59,24 +59,25 @@ pi and Claude Code sessions put it first on PATH.
 bash allowlist, reviewer rules), the oracle after every author session and the stop rule are this
 repo's code; CodeScribe supplies the agent, its bounded tools and the model client. Each run is
 recorded in `dev/transformations/<name>/runs/<run_id>/`. The orchestrator only launches it:
-the `csloop` skill, the translate skill's run mode, or the shell line itself.
+the `csloop` skill or the shell line itself.
 
 ## A stage, in any orchestrator
 
-Ask for the stage ("translate, plan mode"); the agent follows the skill. The scientist's and
+Ask for the stage ("raptorize, plan mode"); the agent follows the skill. translate's plan is
+checked in (`code-translation/dev/transformations/translate/`), so it has no stage skill. The scientist's and
 the harness's steps are shell lines (from the system folder):
 
 | | translate | raptorize | optimize |
 |---|---|---|---|
-| plan mode | skill `translate` | skill `raptorize` | skill `optimize` |
-| approval | `../tools/approve dev/transformations/<name> plan` | `../tools/approve <R> plan` | `../tools/approve <R> plan` |
-| run mode | `dev/bin/loop -b <name>`, `dev/bin/status <name>` | the skill, 3 checkpoints | `dev/bin/evolve <R>`, `dev/bin/container make status EXP=<R>` |
-| verify | the skill's run mode | the checkpoint 3 table | the skill's run mode |
-| acceptance | `../tools/approve dev/transformations/<name> "Group 1"` | `../tools/approve <R> result` | `../tools/approve <R> "candidate <id>"` |
+| plan mode | checked in: `dev/transformations/translate/` | skill `raptorize` | skill `optimize` |
+| approval | `../tools/approve dev/transformations/translate plan` | `../tools/approve <R> plan` | `../tools/approve <R> plan` |
+| run mode | skill `csloop` (`dev/bin/loop -b translate`) | the skill, 3 checkpoints | `dev/bin/evolve <R>`, `dev/bin/container make status EXP=<R>` |
+| verify | skill `csloop-status` | the checkpoint 3 table | the skill's run mode |
+| acceptance | `../tools/approve dev/transformations/translate "Group 1"` | `../tools/approve <R> result` | `../tools/approve <R> "candidate <id>"` |
 
-In any orchestrator, `!` + a line runs it (`!../tools/approve dev/transformations/<name> plan`);
-skills run the stages (`/skill:translate` in pi), plus `csloop` and `csloop-status` in
-code-translation. Approvals go only through `tools/approve`, run by the scientist; act steps
+In any orchestrator, `!` + a line runs it (`!../tools/approve dev/transformations/translate plan`);
+skills run the stages (`/skill:raptorize` in pi); code-translation has only `csloop` and
+`csloop-status`. Approvals go only through `tools/approve`, run by the scientist; act steps
 refuse unapproved plans. pi (`.agents/adapters/pi/hpclab/guard.ts`) and Claude Code
 (`.agents/adapters/claude/settings.json`) also block the agent from approving.
 
@@ -90,10 +91,10 @@ tools/loop.py, tools/requirements.txt  the translate loop; the pinned .venv pack
                                        provider, compact output, approvals guard), linked by setup
 
 code-translation/
-  .agents/skills/translate/            the stage: SKILL.md + templates/
+  .agents/skills/{csloop,csloop-status}/ start the loop; report and verify it
   app/, tests/check.sh, dev/app.md     rd2d (13 Fortran units), its oracle, the app interface
   dev/bin/                             oracle, readiness, build, container, loop, status
-  dev/transformations/<name>/          one folder per transformation; runs/ holds each loop's record
+  dev/transformations/translate/       the transformation (spec, plan, loop.toml); runs/ holds each loop's record
 
 mxp-optimization/
   .agents/skills/{raptorize,optimize}/ the stages: SKILL.md + templates/

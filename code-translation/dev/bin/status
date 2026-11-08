@@ -17,9 +17,9 @@ def tail(path, n=6):
 names = sorted(p.name for p in ROOT.iterdir() if p.is_dir())
 name = sys.argv[1] if len(sys.argv) > 1 else (names[0] if names else None)
 if not name:
-    sys.exit("no transformation yet: run the translate skill in plan mode")
+    sys.exit("no transformation in dev/transformations/")
 task = ROOT / name
-lines = lambda f, prefix: [l for l in (task / f).read_text().splitlines() if l.startswith(prefix)]
+lines = lambda f, prefix: [l for l in (tail(task / f, 10**6) or "").splitlines() if l.startswith(prefix)]
 
 print("== approved")
 print("\n".join(lines("approvals.toml", "item")) or "nothing")

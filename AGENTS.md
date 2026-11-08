@@ -15,7 +15,7 @@ autonomous loop (translate) or an evolutionary search (optimize).
 ## Where things are
 
 - Stage contracts: one skill per stage, `<system>/.agents/skills/<stage>/SKILL.md`, with its
-  `templates/`. Everything an orchestrator needs is in `AGENTS.md` and `.agents/`: Codex and
+  `templates/`; code-translation instead checks in its transformation (see its AGENTS.md). Everything an orchestrator needs is in `AGENTS.md` and `.agents/`: Codex and
   OpenCode read them as they are; Claude Code and pi read their own `.claude/`, `.pi/`, which
   `tools/setup` makes as untracked links into `.agents/` (`.agents/adapters/`). If your orchestrator lists no such skill, read that SKILL.md yourself when the
   scientist asks for the stage.
