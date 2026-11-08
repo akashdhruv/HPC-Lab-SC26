@@ -1,106 +1,109 @@
 # SC26 hands-on: programmable agent systems for scientific software
 
-An agent system is the program of an HPC process, written as version-controlled files: stage
-contracts, templates, tools and a provenance record. It runs under any orchestrator (pi,
-Claude Code, Codex, OpenCode, ...) on Windows, macOS or Linux. Every stage runs the same way:
+## Why
+
+Scientific production codes are long-lived infrastructure: they must keep up with new science
+and new hardware, and every change must preserve numerical and scientific validity. Frontier
+coding agents speed up bounded software tasks, but on their own they leave no repeatable account
+of *how* a change was made, checked and accepted. This tutorial treats AI as a kind of software
+we **program** rather than merely prompt. The program is a **process**: a documented, testable
+workflow that can be versioned, rerun, compared across agents and improved like any research
+software.
+
+## Agent systems
+
+An **agent system** is the program of one HPC process, written as version-controlled files:
+
+- **stage contracts** (skills) that state what the agent may ask, change and check;
+- **templates and worked examples**;
+- **tools** that drive the build, the oracle and the HPC tools, in a docker image;
+- a **provenance record** of plans, code changes, approvals and results.
+
+A scientist leads the process stage by stage. Every stage runs the same way:
 
     plan mode  ->  approval  ->  run mode (act, verify)  ->  acceptance
     agent          scientist     harness, agent              scientist
 
-## Which agent pattern, when
+Each stage uses the agent pattern that fits it:
 
 | pattern | use it when | stage here |
 |---|---|---|
-| interactive session | one careful change; decisions only the scientist can make; checkpoints | **raptorize**: precision modes and a shadow run for one kernel |
-| autonomous loop (author -> oracle -> reviewer) | many similar units; a cheap, exact oracle | **translate**: 13 Fortran units to C++, one per iteration |
-| evolutionary search (OpenEvolve; AlphaEvolve at scale) | an open-ended objective with no known answer, but a trustworthy score | **optimize**: rewrites of a kernel for accuracy under RAPTOR's fp8 emulation |
+| interactive session | one careful change; decisions only the scientist can make | **raptorize**: precision modes and an FP64 shadow for one kernel |
+| autonomous loop (author -> oracle -> reviewer) | many similar units and a cheap, exact oracle | **translate**: 13 Fortran units to C++, one per iteration |
+| evolutionary search (OpenEvolve) | an open-ended objective with a trustworthy score | **optimize**: kernel rewrites for accuracy under low precision |
 
-| system | stages | verification boundary |
-|---|---|---|
-| `code-translation/` | translate (CodeScribe loop) | `tests/check.sh`: the original Fortran's output to 1e-12 |
-| `mxp-optimization/` | raptorize (session), optimize (OpenEvolve) | fp64 unchanged; an audited, red-teamed evaluator with an equivalence guard |
+This repo holds two agent systems:
 
-## What runs where
+| system | thrust | stages | verification boundary |
+|---|---|---|---|
+| [`code-translation/`](code-translation/AGENTS.md) | Translation | translate | `tests/check.sh`: the original Fortran's output to 1e-12 |
+| [`mxp-optimization/`](mxp-optimization/AGENTS.md) | Optimization | raptorize, optimize | FP64 unchanged; an audited evaluator with an equivalence guard |
 
-- **Orchestrator** (yours): the interactive stages and plan modes. It reads `AGENTS.md`
-  and the skills in `<system>/.agents/skills/`. Only `AGENTS.md` and `.agents/` are tracked:
-  Codex and OpenCode read them directly, and `tools/setup` links Claude Code's `.claude/` and pi's
-  `.pi/` into `.agents/` (symlinks; on Windows junctions, or copies where symlinks are refused).
-- **Harnesses** (the system's): the translate loop (`tools/loop.py` on the CodeScribe library,
-  started by `dev/bin/loop`) and the optimize search (OpenEvolve, `dev/bin/evolve`). They call the model in `config.yaml` and enforce their
-  own rules, so they behave the same whichever orchestrator, or person, starts them.
-- **Containers**: every build, run and search, one docker image per system.
+## Decoupled from orchestrators
 
-## Setup
+The process lives in this repo, not in any one tool, so the same workflow runs under pi, Claude
+Code, Codex, OpenCode or a bespoke runtime, with any model, and can be compared fairly. Each
+system is described only by `AGENTS.md` and `.agents/`; `tools/setup` links the folders Claude
+Code (`.claude/`) and pi (`.pi/`) expect. Harnesses that must behave the same whoever starts them
+(the translate loop, the OpenEvolve search) are the system's own code and call the model in
+`config.yaml`. Approvals are the scientist's alone: `tools/approve`, never the agent.
 
-Native: git, Docker, Python >= 3.10 and an orchestrator (any of them); Node.js if that is
-[pi](https://pi.dev). On Windows, Git for Windows (its Git Bash runs `tools/setup`; its tools serve
-the loop).
+## Quickstart
+
+You need git, Docker, Python >= 3.10 and one orchestrator (Node.js too if it is
+[pi](https://pi.dev)). On Windows, use Git Bash.
 
 ```bash
 git clone --recursive <this repo> && cd SC26-Tutorial
-tools/setup                      # .venv (CodeScribe from git), images, both checks; --native skips docker
-$EDITOR config.yaml              # endpoint and key of the harnesses (and of pi)
-cd code-translation && pi        # or claude, codex, opencode; or cd mxp-optimization
+tools/setup              # .venv, orchestrator links, docker images, both checks (--native skips docker)
+$EDITOR config.yaml      # model endpoint and key for the harnesses (and pi)
 ```
 
-Every entry point (`tools/*`, `<system>/dev/bin/*`) is Python and is called by path, the same in
-bash, Git Bash, cmd.exe and PowerShell. Python
-packages go only into the tutorial's `.venv`: `tools/requirements.txt` pins CodeScribe to a commit
-of its git repo; entry points that need it make `.venv` on first use and rerun under it, and
-pi and Claude Code sessions put it first on PATH.
+Then open an agent in a system folder and ask for a stage.
 
-## The translate loop, from any orchestrator
+**Translation** — Fortran to C++ with an autonomous loop:
 
-    orchestrator (pi, claude, codex, opencode)  ->  dev/bin/loop -b <name>  ->  .venv python
-        ->  tools/loop.py (author -> check -> review)  ->  codescribe.lib (Agent, tools, telemetry)
+```bash
+cd code-translation && pi        # or: claude, codex, opencode
+```
 
-`tools/loop.py` is the lab's own loop, tracked here: the policy of `loop.toml` (protected files,
-bash allowlist, reviewer rules), the oracle after every author session and the stop rule are this
-repo's code; CodeScribe supplies the agent, its bounded tools and the model client. Each run is
-recorded in `dev/transformations/<name>/runs/<run_id>/`. The orchestrator only launches it:
-the `csloop` skill or the shell line itself.
+    > Show me the translate plan.          (review dev/transformations/translate/)
+    > !../tools/approve dev/transformations/translate plan
+    > Start the loop.                       (skill csloop; stops at the end of a group)
+    > How is the loop doing?                (skill csloop-status: report and verify)
+    > !../tools/approve dev/transformations/translate "Group 1"
 
-## A stage, in any orchestrator
+**Optimization** — mixed precision with RAPTOR, then an evolutionary search:
 
-Ask for the stage ("raptorize, plan mode"); the agent follows the skill. translate's plan is
-checked in (`code-translation/dev/transformations/translate/`), so it has no stage skill. The scientist's and
-the harness's steps are shell lines (from the system folder):
+```bash
+cd mxp-optimization && claude    # or: pi, codex, opencode
+```
 
-| | translate | raptorize | optimize |
-|---|---|---|---|
-| plan mode | checked in: `dev/transformations/translate/` | skill `raptorize` | skill `optimize` |
-| approval | `../tools/approve dev/transformations/translate plan` | `../tools/approve <R> plan` | `../tools/approve <R> plan` |
-| run mode | skill `csloop` (`dev/bin/loop -b translate`) | the skill, 3 checkpoints | `dev/bin/evolve <R>`, `dev/bin/container make status EXP=<R>` |
-| verify | skill `csloop-status` | the checkpoint 3 table | the skill's run mode |
-| acceptance | `../tools/approve dev/transformations/translate "Group 1"` | `../tools/approve <R> result` | `../tools/approve <R> "candidate <id>"` |
+    > raptorize, plan mode                  (writes the plan in experiments/<E>/<n>-raptorize/)
+    > !../tools/approve <run> plan
+    > raptorize, run mode                   (three checkpoints, ends with a results table)
+    > !../tools/approve <run> result
+    > optimize, plan mode                   (then approve, dev/bin/evolve <run>, accept a candidate)
 
-In any orchestrator, `!` + a line runs it (`!../tools/approve dev/transformations/translate plan`);
-skills run the stages (`/skill:raptorize` in pi); code-translation has only `csloop` and
-`csloop-status`. Approvals go only through `tools/approve`, run by the scientist; act steps
-refuse unapproved plans. pi (`.agents/adapters/pi/hpclab/guard.ts`) and Claude Code
-(`.agents/adapters/claude/settings.json`) also block the agent from approving.
+`!<line>` runs a shell line in any orchestrator; in pi, skills are also `/skill:<name>`. Each
+system's `AGENTS.md` has the details, and `mxp-optimization/dev/README.md` walks through its
+stages.
 
 ## Layout
 
 ```
-config.yaml                            endpoint of the harnesses (and of pi)
-tools/                                 setup, approve, approved, container; hpclab.py (shared helpers)
-tools/loop.py, tools/requirements.txt  the translate loop; the pinned .venv packages (CodeScribe)
-.agents/adapters/                     Claude Code's settings, pi's settings and extension (hpclab:
-                                       provider, compact output, approvals guard), linked by setup
+config.yaml                  model endpoint of the harnesses (and of pi)
+tools/                       setup, approve, approved, container, loop.py (the translate loop)
+.agents/adapters/            Claude Code and pi settings and extension, linked by setup
 
-code-translation/
-  .agents/skills/{csloop,csloop-status}/ start the loop; report and verify it
-  app/, tests/check.sh, dev/app.md     rd2d (13 Fortran units), its oracle, the app interface
-  dev/bin/                             oracle, readiness, build, container, loop, status
-  dev/transformations/translate/       the transformation (spec, plan, loop.toml); runs/ holds each loop's record
+code-translation/            AGENTS.md; app/ (rd2d, 13 Fortran units), tests/check.sh (oracle)
+  .agents/skills/            csloop, csloop-status
+  dev/bin/                   oracle, readiness, build, container, loop, status
+  dev/transformations/       translate: spec, plan, loop.toml; runs/ holds each loop's record
 
-mxp-optimization/
-  .agents/skills/raptorize/            the stage: SKILL.md, templates/, examples/ (worked example, reference.patch)
-  .agents/skills/optimize/             the stage: SKILL.md, templates/, scripts/ (search harness, animation)
-  app/, dev/app.md                     the bubble mini-app (original Flash-X WENO5, FP64), the app interface
-  dev/bin/                             new, container, evolve, patch, animate
-  dev/tools/RAPTOR, dev/tools/OpenEvolve   submodules
-  experiments/<E>/<n>-<stage>/         one folder per stage run
+mxp-optimization/            AGENTS.md; app/ (Deforming Bubble, WENO5, FP64)
+  .agents/skills/            raptorize, optimize (SKILL.md, templates/, examples/, scripts/)
+  dev/bin/                   new, container, evolve, patch, animate
+  dev/tools/                 RAPTOR, OpenEvolve (submodules)
+  experiments/<E>/<n>-<stage>/   one folder per stage run
 ```
