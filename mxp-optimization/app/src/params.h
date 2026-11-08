@@ -44,6 +44,7 @@ struct Params {
 
     // output
     std::string outdir = "out";
+    std::string restart;      // directory of a saved state (state_<rank>.bin); empty: t = 0
     int plot_interval = 20;   // steps between .vti/.pvti dumps (<=0 disables)
     int hist_interval = 1;    // steps between history.csv rows
     int verbosity = 1;
@@ -110,6 +111,7 @@ inline bool setParam(const std::string& key, const std::string& val, Params& p, 
     else if (key == "reverse_time") ok = paramsdetail::toBool(val, p.reverse_time);
     else if (key == "ls_iterations") ok = paramsdetail::toInt(val, p.ls_iterations);
     else if (key == "outdir") p.outdir = val;
+    else if (key == "restart") p.restart = val;
     else if (key == "plot_interval") ok = paramsdetail::toInt(val, p.plot_interval);
     else if (key == "hist_interval") ok = paramsdetail::toInt(val, p.hist_interval);
     else if (key == "verbosity") ok = paramsdetail::toInt(val, p.verbosity);

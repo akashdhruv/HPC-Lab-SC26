@@ -299,3 +299,61 @@ bool writeFields(const Grid& g, const Params& p, int step, double time,
     }
     return true;
 }
+
+// ---- restart state ----------------------------------------------------------
+
+namespace {
+
+std::string stateName(const std::string& dir, int rank) {
+    return joinPath(dir, "state_" + std::to_string(rank) + ".bin");
+}
+
+bool allRanks(const Grid& g, bool ok) {
+    int mine = ok ? 1 : 0;
+    int all = 0;
+    MPI_Allreduce(&mine, &all, 1, MPI_INT, MPI_MIN, g.comm());
+    return all == 1;
+}
+
+}  // namespace
+
+bool writeState(const Grid& g, const Params& p, int step, double time,
+                const std::vector<double>& dfun, std::string& err) {
+    const int head[5] = {g.i0(), g.j0(), g.nx(), g.ny(), step};
+    std::ofstream f(stateName(p.outdir, g.rank()).c_str(), std::ios::binary | std::ios::trunc);
+    f.write(reinterpret_cast<const char*>(head), sizeof(head));
+    f.write(reinterpret_cast<const char*>(&time), sizeof(time));
+    f.write(reinterpret_cast<const char*>(dfun.data()),
+            static_cast<std::streamsize>(dfun.size() * sizeof(double)));
+    f.flush();
+    if (!allRanks(g, static_cast<bool>(f))) {
+        err = "cannot write state to '" + p.outdir + "'";
+        return false;
+    }
+    return true;
+}
+
+bool readState(const Grid& g, const std::string& dir, int& step, double& time,
+               std::vector<double>& dfun, std::string& err) {
+    int head[5] = {0, 0, 0, 0, 0};
+    double t = 0.0;
+    std::ifstream f(stateName(dir, g.rank()).c_str(), std::ios::binary);
+    f.read(reinterpret_cast<char*>(head), sizeof(head));
+    f.read(reinterpret_cast<char*>(&t), sizeof(t));
+    const bool fits = f && head[0] == g.i0() && head[1] == g.j0() && head[2] == g.nx() &&
+                      head[3] == g.ny();
+    std::vector<double> state;
+    if (fits) {
+        state.assign(g.size(), 0.0);
+        f.read(reinterpret_cast<char*>(state.data()),
+               static_cast<std::streamsize>(state.size() * sizeof(double)));
+    }
+    if (!allRanks(g, fits && f && f.peek() == std::ifstream::traits_type::eof())) {
+        err = "state in '" + dir + "' is missing or does not match this grid and rank layout";
+        return false;
+    }
+    dfun.swap(state);
+    step = head[4];
+    time = t;
+    return true;
+}

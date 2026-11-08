@@ -73,4 +73,13 @@ bool writeFields(const Grid& g, const Params& p, int step, double time,
 std::string vtiName(int step, int rank);
 std::string pvtiName(int step);
 
+// Restart state: <dir>/state_<rank>.bin holds i0, j0, nx, ny, step (int), time, then dfun
+// with guard cells (raw doubles).  writeState writes into `p.outdir`; readState fails if the
+// file is missing or was written for another grid or rank layout.  Collective; false with
+// `err` filled on any rank's failure.
+bool writeState(const Grid& g, const Params& p, int step, double time,
+                const std::vector<double>& dfun, std::string& err);
+bool readState(const Grid& g, const std::string& dir, int& step, double& time,
+               std::vector<double>& dfun, std::string& err);
+
 #endif  // BUBBLE_IO_H

@@ -75,6 +75,10 @@ bool runSimulation(const Grid& g, const Params& p, std::vector<double>& dfun, Ru
     double time = 0.0;
     int step = 0;
 
+    // Restart: a state saved by an earlier run (writeState below) replaces the initial
+    // one; its step is written again as this run's first history row and frame.
+    if (!p.restart.empty() && !readState(g, p.restart, step, time, dfun, err)) return false;
+
     // Initial state: velocity at t = 0 (scaled, if reverse_time), output.
     computeFaceVelocity(g, p, time, u, v);
     Diagnostics diag = computeDiagnostics(g, dfun, u, v, 0L);
@@ -127,6 +131,9 @@ bool runSimulation(const Grid& g, const Params& p, std::vector<double>& dfun, Ru
             std::fflush(stdout);
         }
     }
+
+    // The final state, so another run can restart from it.
+    if (!writeState(g, p, step, time, dfun, err)) return false;
 
     summary.steps = step;
     summary.time = time;
