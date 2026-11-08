@@ -1,6 +1,6 @@
 # <R>: the search. Rules here == rules in evaluator.py. Endpoint and models: config.yaml.
 
-title: "WENO5 advection kernel, accurate under bf16 emulation (RAPTOR)"
+title: "WENO5 advection kernel in fp8 (RAPTOR) that matches the original in fp64"
 max_programs: 10
 timeout: 300
 
@@ -11,20 +11,26 @@ problem: |
   The EVOLVE-BLOCK in app/src/advect.cpp holds wenoFaceValue and advectWeno: the WENO5
   advection term of a 2D level set (Flash-X Stencils_advectWeno, flux-difference form, MAC face
   velocities). RAPTOR rounds every floating-point operation of advectWeno and its callees to
-  bf16 (8 exponent bits, 7 mantissa bits, about 2-3 decimal digits). Make the kernel as accurate
-  as possible under that rounding. The scheme must not change, only how its arithmetic is
-  written.
+  fp8 e4m3 (4 exponent bits, 3 mantissa bits, about 1 decimal digit; smallest normal 2^-6,
+  subnormals to 2^-9). Find the implementation of WENO5 whose fp8 run matches the original
+  WENO5 run in fp64 as closely as possible. The scheme must not change, only how its
+  arithmetic is written. The seed, the original code, divides 0 by 0 in fp8 (eps = 1e-15 and
+  the smoothness indicators round to 0) and its run is NaN from the first step.
 
   EVALUATION
-  - Build with `make RAPTOR=1`; run `mpirun -n 1 ./bubble params/bubble.ini nx=128 ny=128
-    max_steps=100 plot_interval=0 precision=bf16 outdir=<out>`: 100 steps on 128x128, the
-    kernel in bf16, everything else and an FP64 shadow run in double.
-  - score = -log10(RMS over steps of err_rms), the RMS over cells of |phi - phi_shadow|.
-    Higher is better. The seed scores <S>.
+  - Build with `make RAPTOR=1`; run `mpirun -n 4 ./bubble params/bubble.ini nx=64 ny=64
+    tmax=0.5 plot_interval=0 precision=fp8 outdir=<out>`: a bubble on 64x64 stretched
+    into a filament (1278 steps), the kernel in fp8, everything else and an FP64
+    shadow run in double: with the guard below, the shadow is the original WENO5 in fp64.
+  - score = -(mean over steps of M), M the shape mismatch: the area inside one interface but
+    not the other, over the fp64 perimeter, in cells (smoothed Heaviside, half-width 1.5
+    cells). M is the mean distance between the fp8 and fp64 interfaces. Higher is better.
+    The seed scores <S>.
 
   GUARDS (score null if failed)
   - EQUIVALENCE_FAILED: the same code run in fp64 must reproduce the seed's fp64 run (area,
     mass, phi_min, phi_max within 1e-10). Any change of the scheme fails.
+  - NAN_OR_INF: M of the fp8 run must be finite at every step.
 
   NOT ALLOWED (score null)
   - New or changed types: every floating-point value stays double (no float, auto, typedef,

@@ -1,0 +1,32 @@
+#!/bin/sh
+''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
+# Make the next instance of a stage, experiments/<E>/<n>-<stage>, from its skill's templates/;
+# prints R. optimize also gets seed.cpp, the raptorized app/src/advect.cpp.
+#
+#   dev/bin/new raptorize|optimize <E>
+import datetime
+import shutil
+import sys
+from pathlib import Path
+
+if len(sys.argv) != 3:
+    sys.exit("usage: dev/bin/new raptorize|optimize <E>")
+stage, experiment = sys.argv[1:]
+system = Path(__file__).resolve().parents[2]
+templates = system / ".agents" / "skills" / stage / "templates"
+if not templates.is_dir():
+    sys.exit(f"unknown stage: {stage}")
+
+parent = system / "experiments" / experiment
+parent.mkdir(parents=True, exist_ok=True)
+run = parent / f"{len([p for p in parent.iterdir() if p.is_dir()]) + 1}-{stage}"
+(run / "results").mkdir(parents=True)
+(run / "patches").mkdir()
+
+name = run.relative_to(system).as_posix()
+for template in templates.iterdir():
+    text = template.read_text().replace("<R>", name).replace("<date>", str(datetime.date.today()))
+    (run / template.name).write_text(text)
+if stage == "optimize":
+    shutil.copy(system / "app" / "src" / "advect.cpp", run / "seed.cpp")
+print(name)

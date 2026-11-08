@@ -1,14 +1,13 @@
-"""Module with implementation of the Run class: one instance of a stage of this system.
+"""Module with implementation of the Run class: one optimize instance R (dev/bin/new makes it).
 
 Usage:
-    run.py new <stage> <E>                         experiments/<E>/<n>-<stage>
     run.py redteam|evolve|resume|status|harvest <R>
     run.py apply <R> <id>
     run.py restore <R>
 """
 
 import csv
-import datetime
+import difflib
 import hashlib
 import json
 import os
@@ -23,8 +22,8 @@ from pathlib import Path
 import yaml
 
 HERE = Path(__file__).resolve().parent
-MXP = HERE.parents[2]
-TUTORIAL = HERE.parents[3]
+MXP = HERE.parents[3]  # .agents/skills/optimize/scripts
+TUTORIAL = HERE.parents[4]
 SEED = MXP / "app" / "src" / "advect.cpp"
 FAILED = -1e12
 
@@ -36,8 +35,8 @@ CHEATS = [
     ("scheme", "(13.0 / 12.0)", "(13.0 / 11.0)"),
     (
         "skip-y",
-        "- (fry * vr - fly * vl) * dyi;",
-        "- 0.0 * (fry * vr - fly * vl) * dyi;",
+        "- (fry * vr - fly * vl) / dy;",
+        "- 0.0 * (fry * vr - fly * vl) / dy;",
     ),
 ]
 
@@ -75,34 +74,6 @@ class Run:
     def __init__(self, path):
         self.path = Path(path).resolve()
         self.results = self.path / "results"
-
-    @classmethod
-    def new(cls, stage, experiment):
-        """
-        Scaffold the next run of a stage (raptorize or optimize) from its skill's templates/
-        """
-        templates = MXP / ".agents" / "skills" / stage / "templates"
-        if not templates.is_dir():
-            sys.exit(f"unknown stage: {stage}")
-
-        parent = MXP / "experiments" / experiment
-        parent.mkdir(parents=True, exist_ok=True)
-        count = len([path for path in parent.iterdir() if path.is_dir()])
-
-        run = cls(parent / f"{count + 1}-{stage}")
-        run.results.mkdir(parents=True)
-        (run.path / "patches").mkdir()
-
-        name = run.path.relative_to(MXP).as_posix()
-        for template in templates.iterdir():
-            text = template.read_text().replace("<R>", name)
-            text = text.replace("<date>", str(datetime.date.today()))
-            (run.path / template.name).write_text(text)
-
-        if stage == "optimize":
-            shutil.copy(SEED, run.path / "seed.cpp")
-
-        print(name)
 
     def approved(self, item):
         """
@@ -172,12 +143,13 @@ class Run:
             ("outside", seed.replace("#include <cstddef>", "#include <cstddef> // x"))
         )
 
-        base, _ = self.score(seed)
-        rows, holes = [f"| seed | {base:.3f} | reference |"], 0
+        base, label = self.score(seed)
+        shown = label if base is None else f"{base:.3f}"
+        rows, holes = [f"| seed | {shown} | reference |"], 0
 
         for name, source in cheats:
             value, label = self.score(source)
-            caught = value is None or value < base
+            caught = value is None or (base is not None and value < base)
             holes += not caught
 
             shown = "null" if value is None else f"{value:.3f}"
@@ -252,10 +224,11 @@ class Run:
         if checkpoint is None:
             shutil.copy(SEED, program)
             base, label = self.score(SEED.read_text())
-            if base is None:
+            if base is None and label != "NAN_OR_INF":  # a NaN seed is the search's first problem
                 self.record("failed")
                 sys.exit(f"the seed does not score: {label}")
-            (self.results / "baseline.json").write_text(json.dumps({"score": base}))
+            baseline = {"score": base, "label": label}
+            (self.results / "baseline.json").write_text(json.dumps(baseline))
 
         config = output / "config.yaml"
         config.write_text(
@@ -331,11 +304,16 @@ class Run:
         checkpoint = self.latest() or sys.exit(f"no checkpoint in {self.results}")
         candidates = self.results / "candidates"
         candidates.mkdir(exist_ok=True)
+        seed = (self.path / "seed.cpp").read_text().splitlines(keepends=True)
 
         rows = []
         for path in (checkpoint / "programs").glob("*.json"):
             program = json.loads(path.read_text())
             (candidates / f"{program['id']}.cpp").write_text(program["code"])
+            diff = difflib.unified_diff(
+                seed, program["code"].splitlines(keepends=True), "seed.cpp", f"{program['id']}.cpp"
+            )
+            (candidates / f"{program['id']}.diff").write_text("".join(diff))
 
             score = (program.get("metrics") or {}).get("combined_score", FAILED)
             rows.append(
@@ -407,9 +385,7 @@ if __name__ == "__main__":
         sys.exit(__doc__)
 
     action, target, *rest = sys.argv[1:]
-    if action == "new":
-        Run.new(target, *rest)
-    elif action in ACTIONS:
+    if action in ACTIONS:
         getattr(Run(target), action)(*rest)
     else:
         sys.exit(__doc__)

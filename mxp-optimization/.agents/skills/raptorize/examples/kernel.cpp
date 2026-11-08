@@ -1,10 +1,10 @@
 // Worked example: what raptorize adds for a kernel Diffuse, with an FP callee Laplacian.
 // Copy the shape, not the names; "..." is existing code of app/. Decisions in R/plan.md used:
-// function Diffuse in diffuse.cpp, formats fp32 (8, 23) and bf16 (8, 7), lowprec float.
+// function Diffuse in diffuse.cpp, formats fp32 (8, 23), bf16 (8, 7), fp8 (4, 3), lowprec float.
 
 // ---- diffuse.h ----
 // RAPTOR-BEGIN: precision modes of Diffuse
-enum class Precision { kFp64, kFp32, kBf16, kLowPrec };
+enum class Precision { kFp64, kFp32, kBf16, kFp8, kLowPrec };
 void DiffuseAt(Precision m, double nu, double dt, const double* u, double* out, int n);
 // RAPTOR-END
 
@@ -36,6 +36,8 @@ void DiffuseAt(Precision m, double nu, double dt, const double* u, double* out, 
         __raptor_truncate_op_func(Diffuse, 64, 1, 8, 23)(nu, dt, u, out, n);
     } else if (m == Precision::kBf16) {
         __raptor_truncate_op_func(Diffuse, 64, 1, 8, 7)(nu, dt, u, out, n);
+    } else if (m == Precision::kFp8) {
+        __raptor_truncate_op_func(Diffuse, 64, 1, 4, 3)(nu, dt, u, out, n);
 #endif
     } else {
         throw std::invalid_argument("this precision needs a RAPTOR=1 build");
@@ -43,7 +45,7 @@ void DiffuseAt(Precision m, double nu, double dt, const double* u, double* out, 
 }
 // RAPTOR-END
 
-// ---- the config; precision is parsed from a `precision` option (roles: dev/workflows/app.md) ----
+// ---- the config; precision is parsed from a `precision` option (roles: dev/app.md) ----
 struct Config {
     ...
     Precision precision = Precision::kFp64;  // RAPTOR

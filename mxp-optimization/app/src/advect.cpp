@@ -58,8 +58,8 @@ void advectWeno(const Grid& g, const std::vector<double>& phi, const std::vector
 
     const int nx = g.nx();
     const int ny = g.ny();
-    const double dxi = 1.0 / g.dx();
-    const double dyi = 1.0 / g.dy();
+    const double dx = g.dx();
+    const double dy = g.dy();
 
     for (int j = 0; j < ny; ++j) {
         for (int i = 0; i < nx; ++i) {
@@ -114,7 +114,8 @@ void advectWeno(const Grid& g, const std::vector<double>& phi, const std::vector
                                     phi[g.index(i, j + 2)], false);
             }
 
-            rhs[g.index(i, j)] += -(frx * ur - flx * ul) * dxi - (fry * vr - fly * vl) * dyi;
+            // As the Fortran: divide by delta (bitwise equal to * 1/dx only when dx = 2^-k).
+            rhs[g.index(i, j)] += -(frx * ur - flx * ul) / dx - (fry * vr - fly * vl) / dy;
         }
     }
 }

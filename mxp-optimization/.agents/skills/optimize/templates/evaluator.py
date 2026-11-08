@@ -1,4 +1,4 @@
-"""Evaluator of <R>: score = -log10(RMS over steps of err_rms) of the RAPTOR-emulated mode.
+"""Evaluator of <R>: score = -(mean over steps of err_shape), the shape mismatch M in cells.
 
 The block is FP64 code that RAPTOR truncates. A candidate must compute the same scheme: its
 fp64 run must reproduce the seed's fp64 diagnostics (the equivalence guard). The constants
@@ -13,20 +13,20 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT / "dev" / "workflows" / "optimize"))
+sys.path.insert(0, str(ROOT / ".agents" / "skills" / "optimize" / "scripts"))
 
 from evaluation import Evaluator, read_csv, run
 
-MODE = "bf16"
-COLUMN = "err_rms"
-GRID, STEPS = 128, 100
+MODE = "fp8"
+COLUMN = "err_shape"  # M: mean distance between the interfaces, in cells
+CASE = "nx=64 ny=64 tmax=0.5"  # raptorize's eval run
 GUARD_COLUMNS = ["area", "mass", "phi_min", "phi_max"]
 GUARD_TOL = 1e-10
 
 OUT = HERE / "results" / f"eval_{os.getpid()}"
 REFERENCE = HERE / "results" / "fp64_reference.csv"
 COMMAND = (
-    f"mpirun -n 1 ./bubble params/bubble.ini nx={GRID} ny={GRID} max_steps={STEPS} "
+    f"mpirun --oversubscribe -n 4 ./bubble params/bubble.ini {CASE} "
     "plot_interval=0 verbosity=0 precision={mode} outdir={out}"
 )
 
@@ -41,14 +41,14 @@ EVALUATOR = Evaluator(
 
 def accuracy(history):
     """
-    -log10 of the RMS over steps of COLUMN, and that RMS; (None, None) if missing
+    -(mean over steps of COLUMN), and that mean; (None, None) if missing or not finite
     """
     errors = read_csv(history).get(COLUMN, []) if history.is_file() else []
     if not errors or not all(map(math.isfinite, errors)):
         return None, None
 
-    rms = math.sqrt(sum(error * error for error in errors) / len(errors))
-    return -math.log10(rms + 1e-30), rms
+    mean = sum(errors) / len(errors)
+    return -mean, mean
 
 
 def equivalent(history):
@@ -71,10 +71,7 @@ def evaluate():
         if failed:
             return failed
 
-        score, rms = accuracy(OUT / "history.csv")
-        if score is None:
-            return EVALUATOR.fail("NAN_OR_INF", f"{COLUMN} missing or non-finite.")
-
+        # The guard first: the seed itself may be NaN in MODE, and its fp64 run is the reference
         code, output = run(COMMAND.format(mode="fp64", out=fp64), 300, ROOT / "app")
         if code:
             return EVALUATOR.fail("FP64_RUN_FAILED", output[-2000:])
@@ -88,7 +85,11 @@ def evaluate():
                 "EQUIVALENCE_FAILED", f"fp64 run differs from the seed's by {gap:.2e}."
             )
 
-        summary = f"{STEPS} steps on {GRID}^2 in {MODE}: rms {COLUMN} = {rms:.3e}."
+        score, rms = accuracy(OUT / "history.csv")
+        if score is None:
+            return EVALUATOR.fail("NAN_OR_INF", f"{COLUMN} missing or non-finite in {MODE}.")
+
+        summary = f"{CASE} in {MODE}: mean shape mismatch M = {rms:.4f} cells."
         return EVALUATOR.result({"score": score}, [("SUMMARY", summary)])
 
     finally:

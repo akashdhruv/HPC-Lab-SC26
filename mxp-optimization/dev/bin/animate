@@ -1,0 +1,16 @@
+#!/bin/sh
+''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
+# Show a candidate of an optimize run against the seed: runs fp64, the seed and the candidate in
+# the run's mode (in the container) and writes <R>/results/animation.mp4; play it with any video player.
+#
+#   dev/bin/animate <R> [id]        id: a harvested candidate; default: the applied app/src/advect.cpp
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from hpclab import Container
+
+if len(sys.argv) not in (2, 3):
+    sys.exit("usage: dev/bin/animate <R> [id]")
+run = Path(sys.argv[1]).as_posix().rstrip("/")
+sys.exit(Container.of(__file__).run(["python3", ".agents/skills/optimize/scripts/animate.py", run, *sys.argv[2:]]))

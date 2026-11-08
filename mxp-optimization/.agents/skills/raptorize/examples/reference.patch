@@ -18,7 +18,7 @@ index fade97f..feee6dd 100644
  
  all: $(BIN)
 diff --git a/mxp-optimization/app/src/advect.cpp b/mxp-optimization/app/src/advect.cpp
-index 0ebf25d..adde800 100644
+index 7c849ea..4049b05 100644
 --- a/mxp-optimization/app/src/advect.cpp
 +++ b/mxp-optimization/app/src/advect.cpp
 @@ -4,6 +4,7 @@
@@ -38,14 +38,14 @@ index 0ebf25d..adde800 100644
  double wenoFaceValue(double s1, double s2, double s3, double s4, double s5, bool positive) {
      // Smoothness indicators (identical in both branches).
      const double rIS1 = (13.0 / 12.0) * sqr(s1 - 2.0 * s2 + s3) +
-@@ -118,3 +121,24 @@ void advectWeno(const Grid& g, const std::vector<double>& phi, const std::vector
+@@ -119,3 +122,26 @@ void advectWeno(const Grid& g, const std::vector<double>& phi, const std::vector
          }
      }
  }
 +// EVOLVE-BLOCK-END
 +// RAPTOR-END
 +
-+// RAPTOR-BEGIN: advectWeno at precision m (RAPTOR emulates fp32 and bf16)
++// RAPTOR-BEGIN: advectWeno at precision m (RAPTOR emulates fp32, bf16 and fp8 e4m3)
 +void advectWenoAt(Precision m, const Grid& g, const std::vector<double>& phi,
 +                  const std::vector<double>& u, const std::vector<double>& v,
 +                  std::vector<double>& rhs) {
@@ -57,6 +57,8 @@ index 0ebf25d..adde800 100644
 +        __raptor_truncate_op_func(advectWeno, 64, 1, 8, 23)(g, phi, u, v, rhs);
 +    } else if (m == Precision::kBf16) {
 +        __raptor_truncate_op_func(advectWeno, 64, 1, 8, 7)(g, phi, u, v, rhs);
++    } else if (m == Precision::kFp8) {
++        __raptor_truncate_op_func(advectWeno, 64, 1, 4, 3)(g, phi, u, v, rhs);
 +#endif
 +    } else {
 +        throw std::invalid_argument("this precision needs a RAPTOR=1 build");
@@ -123,44 +125,57 @@ index dac7446..42f59d5 100644
                  summary.max_divergence = diag.max_divergence;
              }
 diff --git a/mxp-optimization/app/src/io.cpp b/mxp-optimization/app/src/io.cpp
-index 99c4b5b..e082c57 100644
+index 99c4b5b..5aff470 100644
 --- a/mxp-optimization/app/src/io.cpp
 +++ b/mxp-optimization/app/src/io.cpp
-@@ -96,6 +96,24 @@ std::string pvtiName(int step) {
+@@ -96,6 +96,37 @@ std::string pvtiName(int step) {
      return std::string(buf);
  }
  
 +// RAPTOR-BEGIN: errors vs the fp64 shadow
 +void errorsVsShadow(const Grid& g, const std::vector<double>& dfun,
 +                    const std::vector<double>& shadow, Diagnostics& d) {
++    const double eps = heavisideWidth(g);
 +    double local[2] = {0.0, 0.0};  // sum of squares, max
++    double shape[2] = {0.0, 0.0};  // sum |H(dfun) - H(shadow)|, sum delta(shadow) |grad shadow|
 +    for (int j = 0; j < g.ny(); ++j) {
 +        for (int i = 0; i < g.nx(); ++i) {
 +            const double e = std::fabs(dfun[g.index(i, j)] - shadow[g.index(i, j)]);
 +            local[0] += e * e;
 +            if (e > local[1]) local[1] = e;
++            const double s = shadow[g.index(i, j)];
++            shape[0] += std::fabs(smoothedHeaviside(dfun[g.index(i, j)], eps) - smoothedHeaviside(s, eps));
++            if (std::fabs(s) < eps) {
++                const double gx = (shadow[g.index(i + 1, j)] - shadow[g.index(i - 1, j)]) / (2.0 * g.dx());
++                const double gy = (shadow[g.index(i, j + 1)] - shadow[g.index(i, j - 1)]) / (2.0 * g.dy());
++                shape[1] += (1.0 + std::cos(kPi * s / eps)) / (2.0 * eps) * std::sqrt(gx * gx + gy * gy);
++            }
 +        }
 +    }
 +    double sum = 0.0;
++    double total[2] = {0.0, 0.0};
 +    MPI_Allreduce(&local[0], &sum, 1, MPI_DOUBLE, MPI_SUM, g.comm());
 +    MPI_Allreduce(&local[1], &d.err_max, 1, MPI_DOUBLE, MPI_MAX, g.comm());
++    MPI_Allreduce(shape, total, 2, MPI_DOUBLE, MPI_SUM, g.comm());
 +    d.err_rms = std::sqrt(sum / (double(g.nxGlobal()) * g.nyGlobal()));
++    // The cell area cancels; dividing by dx gives cells.
++    d.err_shape = (total[1] > 0.0) ? total[0] / (total[1] * g.dx()) : 0.0;
 +}
 +// RAPTOR-END
 +
  bool ensureOutputDir(const Grid& g, const Params& p, std::string& err) {
      int ok = 1;
      if (g.rank() == 0) {
-@@ -123,7 +141,7 @@ bool writeHistoryHeader(const Grid& g, const Params& p, std::string& err) {
+@@ -123,7 +154,7 @@ bool writeHistoryHeader(const Grid& g, const Params& p, std::string& err) {
          if (!f) {
              ok = 0;
          } else {
 -            f << "step,time,dt,area,mass,phi_min,phi_max,max_divergence,sign_flips\n";
-+            f << "step,time,dt,area,mass,phi_min,phi_max,max_divergence,sign_flips,err_rms,err_max\n";  // RAPTOR: was f << "step,time,dt,area,mass,phi_min,phi_max,max_divergence,sign_flips\n";
++            f << "step,time,dt,area,mass,phi_min,phi_max,max_divergence,sign_flips,err_rms,err_max,err_shape\n";  // RAPTOR: was f << "step,time,dt,area,mass,phi_min,phi_max,max_divergence,sign_flips\n";
              f.flush();
              if (!f) ok = 0;
          }
-@@ -160,7 +178,11 @@ bool appendHistory(const Grid& g, const Params& p, int step, double time, double
+@@ -160,7 +191,13 @@ bool appendHistory(const Grid& g, const Params& p, int step, double time, double
              writeDouble(os, d.phi_max);
              os << ',';
              writeDouble(os, d.max_divergence);
@@ -169,28 +184,34 @@ index 99c4b5b..e082c57 100644
 +            writeDouble(os, d.err_rms);  // RAPTOR
 +            os << ',';                   // RAPTOR
 +            writeDouble(os, d.err_max);  // RAPTOR
++            os << ',';                   // RAPTOR
++            writeDouble(os, d.err_shape);  // RAPTOR
 +            os << '\n';                  // RAPTOR
              f << os.str();
              f.flush();
              if (!f) ok = 0;
 diff --git a/mxp-optimization/app/src/io.h b/mxp-optimization/app/src/io.h
-index fd86add..eb82d7f 100644
+index fd86add..02caedd 100644
 --- a/mxp-optimization/app/src/io.h
 +++ b/mxp-optimization/app/src/io.h
-@@ -32,6 +32,8 @@ struct Diagnostics {
+@@ -32,6 +32,9 @@ struct Diagnostics {
      double phi_max = 0.0;
      double max_divergence = 0.0;   // invariant 6
      long sign_flips = 0;           // redistance warning counter of the last step
 +    double err_rms = 0.0;          // RAPTOR: rms |dfun - shadow| over owned cells
 +    double err_max = 0.0;          // RAPTOR: max |dfun - shadow|
++    double err_shape = 0.0;        // RAPTOR: shape mismatch M vs the shadow, in cells
  };
  
  // Smoothed Heaviside with half-width `eps` (Spec: 1.5 cells):
-@@ -48,6 +50,11 @@ Diagnostics computeDiagnostics(const Grid& g, const std::vector<double>& dfun,
+@@ -48,6 +51,14 @@ Diagnostics computeDiagnostics(const Grid& g, const std::vector<double>& dfun,
                                 const std::vector<double>& u, const std::vector<double>& v,
                                 long signFlips);
  
-+// RAPTOR-BEGIN: errors of `dfun` vs the fp64 shadow, reduced over ranks, into d
++// RAPTOR-BEGIN: errors of `dfun` vs the fp64 shadow, reduced over ranks, into d: rms, max,
++// and the shape mismatch M = sum|H(dfun) - H(shadow)| dA / (P_shadow dx), the mean distance
++// between the two interfaces in cells (P = sum delta(shadow)|grad shadow| dA, H and delta as
++// smoothedHeaviside, half-width heavisideWidth)
 +void errorsVsShadow(const Grid& g, const std::vector<double>& dfun,
 +                    const std::vector<double>& shadow, Diagnostics& d);
 +// RAPTOR-END
@@ -199,7 +220,7 @@ index fd86add..eb82d7f 100644
  // Returns false with `err` filled if it cannot be created.
  bool ensureOutputDir(const Grid& g, const Params& p, std::string& err);
 diff --git a/mxp-optimization/app/src/params.h b/mxp-optimization/app/src/params.h
-index 2865465..81fd7a4 100644
+index 2865465..4ccf85b 100644
 --- a/mxp-optimization/app/src/params.h
 +++ b/mxp-optimization/app/src/params.h
 @@ -14,6 +14,10 @@
@@ -207,7 +228,7 @@ index 2865465..81fd7a4 100644
  constexpr int NGUARD = 3;
  
 +// RAPTOR-BEGIN: precision modes of advectWeno (here: advect.h includes this file via grid.h)
-+enum class Precision { kFp64, kFp32, kBf16 };
++enum class Precision { kFp64, kFp32, kBf16, kFp8 };
 +// RAPTOR-END
 +
  struct Params {
@@ -221,15 +242,16 @@ index 2865465..81fd7a4 100644
  };
  
  namespace paramsdetail {
-@@ -113,6 +118,14 @@ inline bool setParam(const std::string& key, const std::string& val, Params& p,
+@@ -113,6 +118,15 @@ inline bool setParam(const std::string& key, const std::string& val, Params& p,
      else if (key == "plot_interval") ok = paramsdetail::toInt(val, p.plot_interval);
      else if (key == "hist_interval") ok = paramsdetail::toInt(val, p.hist_interval);
      else if (key == "verbosity") ok = paramsdetail::toInt(val, p.verbosity);
-+    // RAPTOR-BEGIN: precision = fp64 | fp32 | bf16
++    // RAPTOR-BEGIN: precision = fp64 | fp32 | bf16 | fp8
 +    else if (key == "precision") {
 +        if (val == "fp64") p.precision = Precision::kFp64;
 +        else if (val == "fp32") p.precision = Precision::kFp32;
 +        else if (val == "bf16") p.precision = Precision::kBf16;
++        else if (val == "fp8") p.precision = Precision::kFp8;
 +        else ok = false;
 +    }
 +    // RAPTOR-END

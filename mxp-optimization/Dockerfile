@@ -1,5 +1,6 @@
 # Toolchain for mxp-optimization when RAPTOR is not installed natively: Ubuntu 24.04, OpenMPI,
-# LLVM/clang 20, MPFR, RAPTOR and OpenEvolve built from the dev/tools submodules.
+# LLVM/clang 20, MPFR, RAPTOR and OpenEvolve built from the dev/tools submodules; ffmpeg and
+# matplotlib for the animation.
 # Build from mxp-optimization/; the repository is mounted at run time by dev/bin/container.
 
 FROM ubuntu:24.04 AS toolchain
@@ -33,6 +34,11 @@ FROM toolchain
 COPY --from=raptor /opt/raptor-install /opt/raptor-install
 COPY dev/tools/OpenEvolve /opt/src/OpenEvolve
 RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir /opt/src/OpenEvolve pyyaml
+
+# The animation of an optimize run (dev/bin/animate): matplotlib frames, encoded by ffmpeg
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/* \
+    && /opt/venv/bin/pip install --no-cache-dir matplotlib
 
 ENV RAPTOR_INSTALL_DIR=/opt/raptor-install \
     PY=/opt/venv/bin/python \

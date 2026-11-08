@@ -10,24 +10,24 @@ changing what the app does at fp64: precision modes through RAPTOR, an FP64 shad
 columns, and the EVOLVE-BLOCK that optimize will evolve. A judgment-heavy, one-off change, so it
 is done with the scientist at three checkpoints, not by a loop. Instance R:
 `experiments/<E>/<n>-raptorize/`. Commands run from `mxp-optimization/`; builds and runs happen
-in the container (`dev/bin/container`). Worked example: `dev/workflows/raptorize/kernel.cpp`; a
-finished raptorize for comparison: `dev/workflows/raptorize/reference.patch`.
+in the container (`dev/bin/container`). Worked example: `examples/kernel.cpp` (next to this file); a
+finished raptorize for comparison: `examples/reference.patch`.
 
 ## Plan mode
 
 1. Check: `git status app` is clean; `dev/bin/container make check` passes.
-2. `dev/bin/container make run STAGE=raptorize E=<yyyy-mm-dd>` prints R.
+2. `dev/bin/new raptorize <yyyy-mm-dd>` prints R.
 3. Read `app/src/advect.cpp` and its callers; ask (proposing a default for each, explained
    plainly) and write R/plan.md, including who planned it (your orchestrator and model):
 
 | question | default |
 |---|---|
 | kernel | `advectWeno` in `src/advect.cpp`, object `build/advect.o` |
-| formats (exponent, mantissa) | fp32 (8, 23), bf16 (8, 7) |
+| formats (exponent, mantissa) | fp32 (8, 23), bf16 (8, 7), fp8 e4m3 (4, 3) |
 | seed | none: the EVOLVE-BLOCK is the FP64 kernel itself, truncated by RAPTOR |
 | evolve scope | `wenoFaceValue` and `advectWeno`: all code truncated in the target mode |
-| errors | `err_rms`, `err_max` of phi vs the shadow, appended to `history.csv` |
-| eval run | `mpirun -n 1 ./bubble params/bubble.ini nx=128 ny=128 max_steps=100 plot_interval=0 precision={mode} outdir={out}` |
+| errors | `err_rms`, `err_max` of phi vs the shadow, and `err_shape` (M: the area between the two phi = 0 interfaces over the shadow's perimeter, in cells), appended to `history.csv` |
+| eval run | `mpirun --oversubscribe -n 4 ./bubble params/bubble.ini nx=64 ny=64 tmax=0.5 plot_interval=0 precision={mode} outdir={out}` (1278 steps) |
 
 4. The scientist approves with `../tools/approve <R> plan`.
 
