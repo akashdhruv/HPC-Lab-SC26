@@ -13,7 +13,7 @@ Claude Code, Codex, OpenCode, ...) on Windows, macOS or Linux. Every stage runs 
 |---|---|---|
 | interactive session | one careful change; decisions only the scientist can make; checkpoints | **raptorize**: precision modes and a shadow run for one kernel |
 | autonomous loop (author -> oracle -> reviewer) | many similar units; a cheap, exact oracle | **translate**: 13 Fortran units to C++, one per iteration |
-| evolutionary search (OpenEvolve; AlphaEvolve at scale) | an open-ended objective with no known answer, but a trustworthy score | **optimize**: rewrites of a kernel for accuracy under RAPTOR's bf16 emulation |
+| evolutionary search (OpenEvolve; AlphaEvolve at scale) | an open-ended objective with no known answer, but a trustworthy score | **optimize**: rewrites of a kernel for accuracy under RAPTOR's fp8 emulation |
 
 | system | stages | verification boundary |
 |---|---|---|
@@ -97,10 +97,10 @@ code-translation/
   dev/transformations/translate/       the transformation (spec, plan, loop.toml); runs/ holds each loop's record
 
 mxp-optimization/
-  .agents/skills/{raptorize,optimize}/ the stages: SKILL.md + templates/
-  app/, dev/app.md                     the bubble mini-app (untouched FP64 code), the app interface
-  dev/bin/                             container, evolve, patch
-  dev/workflows/                       worked example and reference.patch; the search harness
+  .agents/skills/raptorize/            the stage: SKILL.md, templates/, examples/ (worked example, reference.patch)
+  .agents/skills/optimize/             the stage: SKILL.md, templates/, scripts/ (search harness, animation)
+  app/, dev/app.md                     the bubble mini-app (original Flash-X WENO5, FP64), the app interface
+  dev/bin/                             new, container, evolve, patch, animate
   dev/tools/RAPTOR, dev/tools/OpenEvolve   submodules
   experiments/<E>/<n>-<stage>/         one folder per stage run
 ```
