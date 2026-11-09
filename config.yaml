@@ -2,12 +2,14 @@
 #
 # agent:  the model of pi (both systems) and of the CodeScribe loop (loop_model overrides it).
 # evolve: the models OpenEvolve samples candidates from (mxp-optimization).
+# claude: Claude Code on an Anthropic-compatible endpoint (tools/setup writes it to each
+#   .claude/settings.local.json; rerun setup after editing). Off: Claude Code uses its own login.
 # orchestrator: how Claude Code and pi sessions are set up (.agents/adapters).
 # A value may read an environment variable: "${NAME}".
 
-OPENAI_COMP_BASEURL: "<URL>"
-OPENAI_COMP_APIKEY: "<K>"
-OPENAI_COMP_PROVIDER: "<P>"
+OPENAI_COMP_BASEURL: "<string-url>"
+OPENAI_COMP_APIKEY: "<string-apikey>"
+OPENAI_COMP_PROVIDER: "<string-name>"
 
 agent:
   model: "gpt56sol"
@@ -22,6 +24,18 @@ evolve:
   models: ["gpt56terra", "gpt56sol"]
   max_tokens: 16000
   timeout: 300
+
+claude:
+  enabled: true
+  base_url: "<string-url>"  # ANTHROPIC_BASE_URL
+  model: "opus-5.5"
+  opus_model: "opus-5.5"      # default: model
+  sonnet_model: "opus-5.5"    # default: model
+  haiku_model: "opus-5.5"     # default: model
+  max_output_tokens: 32000
+  # One of: a command printing the key/token (apiKeyHelper), or a key ("${NAME}" reads the env).
+  api_key_helper: "alcf-tokens get-token inference"
+  api_key: ""
 
 orchestrator:
   # true: the system's dev/bin, then tools/, first on PATH (tools/README.md), so tools run by

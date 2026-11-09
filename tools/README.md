@@ -71,6 +71,9 @@ tools/                      the root
    `orchestrator.dev_bin_on_path: true` in `config.yaml`, Claude Code and pi also put the system's
    `dev/bin`, then `tools/`, on PATH, so a bare `container` resolves as rule 4 does. `approve`
    stays the scientist's: the adapters block it.
+   With `claude.enabled: true` in `config.yaml`, `tools/setup` writes Claude Code's endpoint
+   (`ANTHROPIC_BASE_URL`, model names, `apiKeyHelper`) to each `.claude/settings.local.json`
+   (its `env`, `model` and `apiKeyHelper` keys; others stay). Rerun setup after editing.
 
 ## Portability
 

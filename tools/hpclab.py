@@ -368,6 +368,27 @@ class Config:
     def model(self):
         return self.get("agent.loop_model") or self.get("agent.model")
 
+    def claude_settings(self):
+        """
+        Claude Code settings for the claude: endpoint of config.yaml; {} unless claude.enabled
+        """
+        if self.get("claude.enabled").lower() != "true":
+            return {}
+        model = self.get("claude.model")
+        env = {
+            "ANTHROPIC_BASE_URL": self.get("claude.base_url") or sys.exit(f"set claude.base_url in {self.path}"),
+            "ANTHROPIC_DEFAULT_OPUS_MODEL": self.get("claude.opus_model", model),
+            "ANTHROPIC_DEFAULT_SONNET_MODEL": self.get("claude.sonnet_model", model),
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL": self.get("claude.haiku_model", model),
+            "CLAUDE_CODE_MAX_OUTPUT_TOKENS": self.get("claude.max_output_tokens"),
+        }
+        if self.get("claude.api_key"):
+            env["ANTHROPIC_AUTH_TOKEN"] = self.get("claude.api_key")
+        settings = {"env": {k: v for k, v in env.items() if v}, "model": model}
+        if self.get("claude.api_key_helper"):
+            settings["apiKeyHelper"] = self.get("claude.api_key_helper")
+        return settings
+
     def export(self, env):
         """
         The endpoint as the OPENAI_COMP_* variables CodeScribe reads
@@ -543,7 +564,21 @@ class Orchestrators:
                 links[".claude/skills"] = folder / ".agents" / "skills"
             for path, target in links.items():
                 link(folder / path, target)
+            self.claude_endpoint(folder / ".claude" / "settings.local.json")
         print("Claude Code and pi linked to .agents")
+
+    def claude_endpoint(self, path):
+        """
+        The config.yaml claude: endpoint merged into settings.local.json (the user's other keys stay)
+        """
+        keys = ["env", "model", "apiKeyHelper"]
+        settings = json.loads(path.read_text()) if path.is_file() else {}
+        settings = {k: v for k, v in settings.items() if k not in keys}
+        settings.update(Config().claude_settings())
+        if settings:
+            path.write_text(json.dumps(settings, indent=2) + "\n")
+        elif path.is_file():
+            path.unlink()
 
 
 def link(path, target):
