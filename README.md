@@ -21,23 +21,10 @@ An **agent system** is the program of one HPC process, written as version-contro
 
 ```mermaid
 flowchart LR
-  subgraph O["Orchestrators"]
-    direction TB
-    o1["Claude Code"] ~~~ o2["Codex"] ~~~ o3["OpenCode"] ~~~ o4["pi"] ~~~ o5["bespoke runtime"]
-  end
-  subgraph S["Agent systems (this repo)"]
-    direction TB
-    s1["code-translation<br/><i>Translation</i>"]
-    s2["mxp-optimization<br/><i>Optimization</i>"]
-  end
-  T["HPC tools<br/><small>RAPTOR, OpenEvolve, compilers, MPI<br/>in docker images</small>"]
-  C["Scientific codes<br/><small>rd2d (Fortran), Deforming Bubble (C++)</small>"]
-  X["Other agent systems<br/><small>Verification, Performance, Mathematics, ...</small>"]
-  O -- executes --> S
-  S -- drive --> T
-  S -- transform --> C
-  T --> C
-  S <-. compose .-> X
+  O["Orchestrator<br/><small>Claude Code, Codex, pi, ...</small>"]
+  S["Agent system<br/><small>this repo</small>"]
+  C["Scientific code"]
+  O -- runs --> S -- changes and checks --> C
 ```
 
 *Agent systems are separate from the orchestrators that run them: the process is in the repo,
@@ -45,23 +32,9 @@ not in the tool.*
 
 A scientist leads the process stage by stage. Every stage runs the same way:
 
-    plan mode  ->  approval  ->  run mode (act, verify)  ->  acceptance
-    agent          scientist     harness, agent              scientist
-
 ```mermaid
 flowchart LR
-  SCI(["Scientist"])
-  AS["Agent system<br/><small>stage contract, templates, tools</small>"]
-  P["Plan mode<br/><small>agent writes the plan</small>"]
-  R["Run mode<br/><small>orchestrator, harness, subagents</small>"]
-  CH["Code changes"]
-  VB[["Verification boundary<br/><small>oracle / audited evaluator</small>"]]
-  PR[("Provenance record<br/><small>plans, diffs, approvals, results</small>")]
-  SCI -- asks for a stage --> AS --> P
-  P -- "approval (tools/approve)" --> R --> CH --> VB
-  VB -. acceptance .-> SCI
-  VB -.-> PR
-  PR -. refines the process .-> AS
+  P["Plan<br/><small>agent</small>"] --> A["Approve<br/><small>scientist</small>"] --> R["Run and verify<br/><small>agent</small>"] --> K["Accept<br/><small>scientist</small>"]
 ```
 
 *The team writes the process, an orchestrator carries it out, the scientist approves the plan
