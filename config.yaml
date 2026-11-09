@@ -1,16 +1,17 @@
-# Model endpoint of the SC26 agent systems: any OpenAI-compatible API.
+# Model endpoint of the agent systems: any OpenAI-compatible API.
 #
 # agent:  the model of pi (both systems) and of the CodeScribe loop (loop_model overrides it).
 # evolve: the models OpenEvolve samples candidates from (mxp-optimization).
+# orchestrator: how Claude Code and pi sessions are set up (.agents/adapters).
 # A value may read an environment variable: "${NAME}".
 
-OPENAI_COMP_BASEURL: ""
-OPENAI_COMP_APIKEY: ""
-OPENAI_COMP_PROVIDER: "openai"
+OPENAI_COMP_BASEURL: "<URL>"
+OPENAI_COMP_APIKEY: "<K>"
+OPENAI_COMP_PROVIDER: "<P>"
 
 agent:
   model: "gpt56sol"
-  loop_model: ""
+  loop_model: "gpt56terra"
   reasoning: false
   context_window: 272000
   max_tokens: 16384
@@ -21,3 +22,8 @@ evolve:
   models: ["gpt56terra", "gpt56sol"]
   max_tokens: 16000
   timeout: 300
+
+orchestrator:
+  # true: the system's dev/bin, then tools/, first on PATH (tools/README.md), so tools run by
+  # name (oracle, container; approve is still the scientist's) and inherit as by path. Off, call them by path (dev/bin/oracle, ../tools/container).
+  dev_bin_on_path: true
