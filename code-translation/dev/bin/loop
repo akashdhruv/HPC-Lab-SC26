@@ -1,86 +1,16 @@
 #!/bin/sh
-''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
-# Run a transformation with the lab's author -> check -> review loop (tools/loop.py, built on
-# the CodeScribe library in .venv).
-#
-#   dev/bin/loop <name> [loops]     start it, detached from this session
-#   dev/bin/loop -f <name> [loops]  in the foreground
-#   dev/bin/loop --stop <name>      stop it after recording the run
-#
-# The harness, not the orchestrator, runs the loop: it calls the model in config.yaml
-# (agent.loop_model, else agent.model), enforces loop.toml (bash allowlist, protected files),
-# runs [check] after every author session and stops on a passing check and a clean review.
-# So any orchestrator, or the scientist, starts it the same way and gets the same loop.
-# Detached, it outlives the session that starts it: close the session and come back with
-# dev/bin/status <name>. Output: dev/transformations/<name>/runs/loop.log (pid in loop.pid);
-# the record of each run: dev/transformations/<name>/runs/<run_id>/.
-import os
-import platform
-import signal
+"export" "MSYS_NO_PATHCONV=1"
+"exec" "$(python3 -c '' 2>/dev/null && echo python3 || echo python)" "$0" "$@"
+# The loop (dev/tools/loop.py) on a transformation, detached.
+# Runs Translation.loop (code-translation/dev/tools.py); --help for its usage.
+# Lines 2-3 rerun this file under python3 (or python) from any shell; to Python they are strings.
+
 import sys
 from pathlib import Path
 
-TOOLS = Path(__file__).resolve().parents[3] / "tools"
-sys.path.insert(0, str(TOOLS))
-from hpclab import Approvals, Config, Job, Venv, windows_tools
+root = next(p for p in Path(__file__).resolve().parents if (p / "tools" / "hpclab.py").is_file())
+sys.path.insert(0, str(root / "tools"))
 
-BIN = Path(__file__).resolve().parent
-SYSTEM = BIN.parents[1]
+import hpclab
 
-
-def interrupt(*_):
-    raise KeyboardInterrupt
-
-
-class Transformation:
-    """
-    dev/transformations/<name>: spec, plan, loop.toml, approvals and the runs of its loop
-    """
-
-    def __init__(self, name):
-        self.name = name
-        self.path = SYSTEM / "dev" / "transformations" / name
-        self.runs = self.path / "runs"
-        self.job = Job(self.runs, "loop")
-
-    def start(self, loops):
-        Approvals(self.path).require("plan")
-        pid = self.job.start([sys.executable, __file__, "-f", self.name, str(loops)], SYSTEM)
-        print(f"loop started (pid {pid}), log: {self.job.log.relative_to(SYSTEM).as_posix()}; "
-              f"follow it with dev/bin/status {self.name}")
-
-    def stop(self):
-        print(f"loop stopping (pid {self.job.stop()}); dev/bin/status {self.name} shows its record")
-
-    def loop(self, loops):
-        from loop import Loop
-
-        Approvals(self.path).require("plan")
-        if self.job.pid not in (None, os.getpid()):
-            sys.exit(f"loop already {self.job.state()}")
-        self.runs.mkdir(exist_ok=True)
-        self.job.pidfile.write_text(str(os.getpid()))
-        signal.signal(signal.SIGTERM, interrupt)  # dev/bin/loop --stop: end like Ctrl-C, recorded
-
-        config = Config()
-        config.export(os.environ)
-        # dev/bin first (oracle, readiness, build), then the venv's bin from Venv.activate()
-        path = [str(BIN), *windows_tools(), os.environ["PATH"]]
-        os.environ["PATH"] = os.pathsep.join(path)
-
-        print(f"[loop] {self.name}: {loops} loop(s) with {config.model} on {platform.system()}", flush=True)
-        run = Loop(self.path, SYSTEM, "oaic-" + config.model,
-                   reasoning=str(config.get("agent.reasoning")).lower() == "true").run(loops)
-        host = {"os": platform.platform(), "python": platform.python_version()}
-        (run.record / "host.toml").write_text("".join(f'{k} = "{v}"\n' for k, v in host.items()))
-        print(f"[loop] {run.stop_reason}, record: {run.record.relative_to(SYSTEM).as_posix()}")
-
-
-if __name__ == "__main__":
-    Venv().activate()
-    flag = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in ("-f", "--stop") else None
-    argv = sys.argv[2:] if flag else sys.argv[1:]
-    if not argv:
-        sys.exit("usage: dev/bin/loop [-f] <name> [loops] | dev/bin/loop --stop <name>")
-    t, loops = Transformation(argv[0]), int(argv[1]) if len(argv) > 1 else 10
-    t.stop() if flag == "--stop" else t.loop(loops) if flag == "-f" else t.start(loops)
+hpclab.main(__file__)

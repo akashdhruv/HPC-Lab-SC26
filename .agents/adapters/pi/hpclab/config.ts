@@ -22,6 +22,7 @@ export class Config {
 	get apiKey(): string { return this.data.OPENAI_COMP_APIKEY ?? ""; }
 	get agent(): Record<string, any> { return this.data.agent ?? {}; }
 	get model(): string { return this.agent.model ?? ""; }
+	get devBinOnPath(): boolean { return this.data.orchestrator?.dev_bin_on_path === true; }
 	get host(): string { try { return new URL(this.baseUrl).host; } catch { return this.baseUrl; } }
 
 	provider() {

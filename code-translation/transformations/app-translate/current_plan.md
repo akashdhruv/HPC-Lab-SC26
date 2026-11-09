@@ -1,4 +1,4 @@
-# Plan: translate
+# Plan: app-translate
 
 Planned with: pi using hpc-lab/agent, 2026-11-07
 

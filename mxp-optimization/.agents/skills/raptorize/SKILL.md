@@ -10,12 +10,12 @@ changing what the app does at fp64: precision modes through RAPTOR, an FP64 shad
 columns, and the EVOLVE-BLOCK that optimize will evolve. A judgment-heavy, one-off change, so it
 is done with the scientist at three checkpoints, not by a loop. Instance R:
 `experiments/<E>/<n>-raptorize/`. Commands run from `mxp-optimization/`; builds and runs happen
-in the container (`dev/bin/container`). Worked example: `examples/kernel.cpp` (next to this file); a
+in the container (`../tools/container`). Worked example: `examples/kernel.cpp` (next to this file); a
 finished raptorize for comparison: `examples/reference.patch`.
 
 ## Plan mode
 
-1. Check: `git status app` is clean; `dev/bin/container make check` passes.
+1. Check: `git status app` is clean; `../tools/container make check` passes.
 2. `dev/bin/new raptorize <yyyy-mm-dd>` prints R.
 3. Read `app/src/advect.cpp` and its callers; ask (proposing a default for each, explained
    plainly) and write R/plan.md, including who planned it (your orchestrator and model):
@@ -38,7 +38,7 @@ Stop at each checkpoint, show the evidence, and wait for the scientist:
 1. Scope: the files to touch and the planned blocks; `dev/bin/patch <R>/patches/1-scope.patch`.
 2. Diff: follow `kernel.cpp`; self-check `git diff -U0 app` (every removed line has a
    `RAPTOR: was` twin); `dev/bin/patch <R>/patches/2-diff.patch`.
-3. Results: `dev/bin/container make clean`, `dev/bin/container make check`, `dev/bin/container make RAPTOR=0 check`,
+3. Results: `../tools/container make clean`, `../tools/container make check`, `../tools/container make RAPTOR=0 check`,
    then the eval run per mode into `<R>/results/<mode>`; a table of the final error per mode;
    `dev/bin/patch <R>/patches/3-results.patch`.
 
@@ -66,7 +66,7 @@ Acceptance: the scientist records `../tools/approve <R> result`; optimize can st
 ## Boundaries
 
 - May write: app/'s sources and Makefile, R. Must not: app/tests, the root Makefile.
-- Never write `approvals.toml` or run `tools/approve`.
+- Never write `approvals.toml` or run `../tools/approve`.
 
 ## Provenance
 

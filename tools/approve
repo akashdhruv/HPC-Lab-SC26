@@ -1,16 +1,16 @@
 #!/bin/sh
-''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
-# Record a human approval in an instance's approvals.toml. The scientist runs this; agents never do.
-#
-#   tools/approve <instance> "<item>" ["note"]
-#
-# Items: "plan", then "Group <k>" (translate), "result" (raptorize) or "candidate <id>" (optimize).
+"export" "MSYS_NO_PATHCONV=1"
+"exec" "$(python3 -c '' 2>/dev/null && echo python3 || echo python)" "$0" "$@"
+# Record a human approval (the scientist only).
+# Runs Lab.approve (tools/hpclab.py); --help for its usage.
+# Lines 2-3 rerun this file under python3 (or python) from any shell; to Python they are strings.
+
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from hpclab import Approvals
+root = next(p for p in Path(__file__).resolve().parents if (p / "tools" / "hpclab.py").is_file())
+sys.path.insert(0, str(root / "tools"))
 
-if len(sys.argv) < 3:
-    sys.exit('usage: tools/approve <instance> "<item>" ["note"]')
-print(Approvals(sys.argv[1]).add(sys.argv[2], " ".join(sys.argv[3:])), end="")
+import hpclab
+
+hpclab.main(__file__)

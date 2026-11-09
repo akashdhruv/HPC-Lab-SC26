@@ -1,40 +1,16 @@
 #!/bin/sh
-''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
-# State of a transformation: approvals, groups, agent log, and its loop: running or not, its log
-# and its last runs. Works from any session, while the detached loop runs or after it stopped.
-#
-#   dev/bin/status [name]
+"export" "MSYS_NO_PATHCONV=1"
+"exec" "$(python3 -c '' 2>/dev/null && echo python3 || echo python)" "$0" "$@"
+# State of a transformation and its loop.
+# Runs Translation.status (code-translation/dev/tools.py); --help for its usage.
+# Lines 2-3 rerun this file under python3 (or python) from any shell; to Python they are strings.
+
 import sys
 from pathlib import Path
 
-SYSTEM = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(SYSTEM.parent / "tools"))
-from hpclab import Job
+root = next(p for p in Path(__file__).resolve().parents if (p / "tools" / "hpclab.py").is_file())
+sys.path.insert(0, str(root / "tools"))
 
-ROOT = SYSTEM / "dev" / "transformations"
+import hpclab
 
-
-def tail(path, n=6):
-    return "\n".join(path.read_text().splitlines()[-n:]) if path.is_file() else None
-
-
-names = sorted(p.name for p in ROOT.iterdir() if p.is_dir())
-name = sys.argv[1] if len(sys.argv) > 1 else (names[0] if names else None)
-if not name:
-    sys.exit("no transformation in dev/transformations/")
-task = ROOT / name
-lines = lambda f, prefix: [l for l in (tail(task / f, 10**6) or "").splitlines() if l.startswith(prefix)]
-
-print("== approved")
-print("\n".join(lines("approvals.toml", "item")) or "nothing")
-print("== groups")
-print("\n".join(lines("current_plan.md", "- Group")))
-print("== agent log")
-print(tail(task / "agent_log.md") or "empty")
-job = Job(task / "runs", "loop")
-print(f"== loop: {job.state()}")
-print(job.tail() or "not run")
-runs = sorted((task / "runs").glob("*/run.toml"), key=lambda p: p.stat().st_mtime)
-for run in runs[-3:]:
-    keep = ("run_id", "model", "loops_completed", "stop_reason")
-    print("  " + "  ".join(l for l in run.read_text().splitlines() if l.split(" ")[0] in keep))
+hpclab.main(__file__)

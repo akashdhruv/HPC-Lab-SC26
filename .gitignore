@@ -4,7 +4,7 @@ __pycache__/
 .codescribe/
 code-translation/app/build/
 code-translation/app/rd2d
-code-translation/dev/transformations/*/runs/
+code-translation/transformations/*/runs/
 mxp-optimization/app/build/
 mxp-optimization/app/bubble
 mxp-optimization/app/out*/

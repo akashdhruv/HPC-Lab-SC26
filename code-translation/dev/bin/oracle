@@ -1,13 +1,16 @@
 #!/bin/sh
-''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
-# The oracle, in the container: clean build, one run, compare with the golden output.
-#
-#   dev/bin/oracle      (exit 0: correct)
+"export" "MSYS_NO_PATHCONV=1"
+"exec" "$(python3 -c '' 2>/dev/null && echo python3 || echo python)" "$0" "$@"
+# The oracle: clean build, one run, compare with the golden output.
+# Runs Translation.oracle (code-translation/dev/tools.py); --help for its usage.
+# Lines 2-3 rerun this file under python3 (or python) from any shell; to Python they are strings.
+
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
-from hpclab import Container
+root = next(p for p in Path(__file__).resolve().parents if (p / "tools" / "hpclab.py").is_file())
+sys.path.insert(0, str(root / "tools"))
 
-CONTAINER = Container.of(__file__)
-sys.exit(CONTAINER.run(["tests/check.sh", *sys.argv[1:]]))
+import hpclab
+
+hpclab.main(__file__)

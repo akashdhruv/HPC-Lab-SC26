@@ -8,7 +8,7 @@ An application can use this system if it has:
    can be swapped for C++ without touching it.
 2. A run in seconds, from `app/`, with no arguments beyond its input file, whose output
    contains lines a script can compare (here `diag` lines of numbers).
-3. A golden output of the original Fortran (`tests/golden.out`) and a comparison with a
-   tolerance (`tests/compare.py`), wrapped as the oracle `tests/check.sh`: clean build, one
+3. A golden output of the original Fortran (`app/tests/golden.out`) and a comparison with a
+   tolerance (`app/tests/compare.py`), wrapped as the oracle `app/tests/check.sh`: clean build, one
    run, compare; exit 0 means correct.
 4. Deterministic output: two runs of the same build give the same numbers.

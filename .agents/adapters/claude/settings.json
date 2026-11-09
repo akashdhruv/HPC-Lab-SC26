@@ -2,6 +2,7 @@
   "permissions": {
     "deny": [
       "Edit(**/approvals.toml)",
+      "Bash(approve:*)",
       "Bash(tools/approve:*)",
       "Bash(../tools/approve:*)",
       "Bash(python tools/approve:*)",

@@ -16,7 +16,8 @@ An **agent system** is the program of one HPC process, written as version-contro
 
 - **stage contracts** (skills) that state what the agent may ask, change and check;
 - **templates and worked examples**;
-- **tools** that drive the build, the oracle and the HPC tools, in a docker image;
+- **tools** that drive the build, the oracle and the HPC tools, in a docker image
+  ([tools/README.md](tools/README.md)), inherited down the directory tree like methods of classes;
 - a **provenance record** of plans, code changes, approvals and results.
 
 ```mermaid
@@ -52,7 +53,7 @@ This repo holds two agent systems:
 
 | system | thrust | stages | verification boundary |
 |---|---|---|---|
-| [`code-translation/`](code-translation/AGENTS.md) | Translation | translate | `tests/check.sh`: the original Fortran's output to 1e-12 |
+| [`code-translation/`](code-translation/AGENTS.md) | Translation | translate | `app/tests/check.sh`: the original Fortran's output to 1e-12 |
 | [`mxp-optimization/`](mxp-optimization/AGENTS.md) | Optimization | raptorize, optimize | FP64 unchanged; an audited evaluator with an equivalence guard |
 
 ## Decoupled from orchestrators
@@ -63,12 +64,20 @@ system is described only by `AGENTS.md` and `.agents/`; `tools/setup` links the 
 Code (`.claude/`) and pi (`.pi/`) expect. Harnesses that must behave the same whoever starts them
 (the translate loop, the OpenEvolve search) are the system's own code and call the model in
 `config.yaml`. They run detached from the session that starts them: close it, come back later
-and probe them with `dev/bin/status` (loop) or `dev/bin/evolve --status <run>` (search). Approvals are the scientist's alone: `tools/approve`, never the agent.
+and probe them with `dev/bin/status` (loop) or `dev/bin/evolve --status <run>` (search).
+Approvals are the scientist's alone: `tools/approve`, never the agent.
+
+Tools are methods of classes that follow the directory tree: `tools/hpclab.py` holds `Lab`, the
+root; each system subclasses it in its `dev/tools.py` and adds a stub in `dev/bin/` only for the
+tools it adds or overrides, so `../tools/container` from a system runs in that system's image. A
+system's `dev/` holds tools only; what it produces lives beside it, in `transformations/`
+(approved, rerunnable procedures) or `experiments/` (records of open-ended work).
+[tools/README.md](tools/README.md) is the contract.
 
 ## Quickstart
 
 You need git, Docker, Python >= 3.10 and one orchestrator (Node.js too if it is
-[pi](https://pi.dev)). On Windows, use Git Bash.
+[pi](https://pi.dev)). On Windows, use Git Bash (or call any tool through Python: `python tools/setup`).
 
 ```bash
 git clone --recursive <this repo> && cd SC26-Tutorial
@@ -84,11 +93,11 @@ Then open an agent in a system folder and ask for a stage.
 cd code-translation && pi        # or: claude, codex, opencode
 ```
 
-    > Show me the translate plan.          (review dev/transformations/translate/)
-    > !../tools/approve dev/transformations/translate plan
-    > Start the loop.                       (skill csloop; stops at the end of a group)
-    > How is the loop doing?                (skill csloop-status: report and verify)
-    > !../tools/approve dev/transformations/translate "Group 1"
+    > Show me the translate plan.          (review transformations/app-translate/)
+    > !../tools/approve transformations/app-translate plan
+    > Start the loop.                       (skill loop: asks which transformation; stops at the end of a group)
+    > How is the loop doing?                (skill loop-status: report and verify)
+    > !../tools/approve transformations/app-translate "Group 1"
 
 **Optimization** — mixed precision with RAPTOR, then an evolutionary search:
 
@@ -109,18 +118,20 @@ stages.
 ## Layout
 
 ```
-config.yaml                  model endpoint of the harnesses (and of pi)
-tools/                       setup, approve, approved, container, loop.py (the translate loop)
+config.yaml                  model endpoint of the harnesses (and of pi); orchestrator.dev_bin_on_path
+tools/                       setup and what every system inherits (tools/README.md: the contract)
+                             approve, container; hpclab.py (class Lab, levels, dispatch)
 .agents/adapters/            Claude Code and pi settings and extension, linked by setup
 
-code-translation/            AGENTS.md; app/ (rd2d, 13 Fortran units), tests/check.sh (oracle)
-  .agents/skills/            csloop, csloop-status
-  dev/bin/                   oracle, readiness, build, container, loop, status
-  dev/transformations/       translate: spec, plan, loop.toml; runs/ holds each loop's record
+code-translation/            AGENTS.md; app/ (rd2d, 13 Fortran units; tests/check.sh, the oracle)
+  .agents/skills/            loop, loop-status
+  dev/tools.py               class Translation(Lab); dev/bin/: oracle, readiness, build, loop, status
+  dev/tools/                 loop.py (the translate loop: author -> oracle -> reviewer), index.py
+  transformations/<T>/       app-translate: spec, plan, loop.toml; runs/ holds each loop's record
 
 mxp-optimization/            AGENTS.md; app/ (Deforming Bubble, WENO5, FP64)
   .agents/skills/            raptorize, optimize (SKILL.md, templates/, examples/, scripts/)
-  dev/bin/                   new, container, evolve, patch, animate
+  dev/tools.py               class Mxp(Lab); dev/bin/: new, evolve, patch, animate
   dev/tools/                 RAPTOR, OpenEvolve (submodules)
   experiments/<E>/<n>-<stage>/   one folder per stage run
 ```

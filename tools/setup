@@ -1,111 +1,16 @@
 #!/bin/sh
-''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
-# One-time setup on Windows, macOS or Linux; safe to rerun. Stdlib only.
-#
-#   tools/setup [--native]
-#
-# Native: Claude Code's .claude/ and pi's .pi/ as links into .agents (Orchestrators), .venv with
-# tools/requirements.txt (CodeScribe from its git repo, for dev/bin/loop), and pi if Node.js is here.
-# Then (unless --native) the submodules, the docker images hpc-lab-translate and hpc-lab-mxp,
-# and both checks.
-import os
-import shutil
-import subprocess
+"export" "MSYS_NO_PATHCONV=1"
+"exec" "$(python3 -c '' 2>/dev/null && echo python3 || echo python)" "$0" "$@"
+# One-time setup: links, .venv, pi, images and checks.
+# Runs Lab.setup (tools/hpclab.py); --help for its usage.
+# Lines 2-3 rerun this file under python3 (or python) from any shell; to Python they are strings.
+
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "tools"))
-from hpclab import Container, Venv
+root = next(p for p in Path(__file__).resolve().parents if (p / "tools" / "hpclab.py").is_file())
+sys.path.insert(0, str(root / "tools"))
 
+import hpclab
 
-class Orchestrators:
-    """
-    Codex and OpenCode read AGENTS.md and .agents/skills; Claude Code and pi read their own folder
-    of the directory they start in, so link it (untracked) to .agents, in the root and each system
-    """
-
-    LINKS = {".claude/settings.json": ".agents/adapters/claude/settings.json",
-             ".pi/settings.json": ".agents/adapters/pi/settings.json",
-             ".pi/extensions/hpclab": ".agents/adapters/pi/hpclab"}
-
-    @staticmethod
-    def link(path, target):
-        """
-        A relative symlink; on Windows without symlink rights, a junction (folder) or a copy (file)
-        """
-        if path.is_symlink() or path.is_file():
-            path.unlink()
-        elif path.is_dir():
-            path.rmdir()  # a junction; refuses a real folder with content
-        path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            os.symlink(os.path.relpath(target, path.parent), path, target_is_directory=target.is_dir())
-        except OSError:
-            if not target.is_dir():
-                shutil.copyfile(target, path)
-            else:
-                import _winapi
-                _winapi.CreateJunction(str(target), str(path))
-
-    def main(self):
-        for folder in [ROOT, *sorted(p.parent for p in ROOT.glob("*/AGENTS.md"))]:
-            links = {rel: ROOT / target for rel, target in self.LINKS.items()}
-            if (folder / ".agents" / "skills").is_dir():
-                links[".claude/skills"] = folder / ".agents" / "skills"
-            for rel, target in links.items():
-                self.link(folder / rel, target)
-        print("Claude Code and pi linked to .agents")
-
-
-class Setup:
-    def __init__(self, native):
-        self.native = native
-
-    @staticmethod
-    def run(*args, log=None):
-        out = open(log, "w") if log else None
-        code = subprocess.call(list(args), cwd=ROOT, stdout=out, stderr=subprocess.STDOUT if out else None)
-        if code:
-            if log:
-                print("".join(Path(log).read_text().splitlines(True)[-5:]), end="")
-            sys.exit(f"failed: {' '.join(map(str, args))}")
-
-    @staticmethod
-    def need(command, hint):
-        if not shutil.which(command):
-            sys.exit(f"missing: {command} ({hint})")
-
-    def pi(self):
-        if shutil.which("npm") and not shutil.which("pi"):
-            self.run(shutil.which("npm"), "install", "-g", "@earendil-works/pi-coding-agent")
-        if shutil.which("pi"):
-            print("pi ready")
-
-    def containers(self):
-        self.need("docker", "Docker Desktop, or Docker Engine on Linux")
-        self.run("git", "submodule", "update", "--init", "--recursive")
-        for system in Container.IMAGES:
-            if Container(system).build():
-                sys.exit(f"failed: docker build of {system}")
-        print(f"images {' and '.join(Container.IMAGES.values())} built")
-        self.run(sys.executable, "code-translation/dev/bin/oracle", log=ROOT / "setup.log")
-        print("code-translation oracle passes")
-        self.run(sys.executable, "mxp-optimization/dev/bin/container", "make", "check", log=ROOT / "setup.log")
-        print("mxp-optimization tests pass")
-        os.remove(ROOT / "setup.log")
-
-    def main(self):
-        self.need("git", "Git; on Windows Git for Windows, which also provides Git Bash")
-        Orchestrators().main()
-        Venv().ensure()
-        print("CodeScribe ready in .venv (dev/bin/loop uses it)")
-        self.pi()
-        if "<your key>" in (ROOT / "config.yaml").read_text():
-            print("edit config.yaml: OPENAI_COMP_APIKEY")
-        if not self.native:
-            self.containers()
-
-
-if __name__ == "__main__":
-    Setup("--native" in sys.argv[1:]).main()
+hpclab.main(__file__)

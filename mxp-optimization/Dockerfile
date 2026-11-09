@@ -1,7 +1,7 @@
 # Toolchain for mxp-optimization when RAPTOR is not installed natively: Ubuntu 24.04, OpenMPI,
 # LLVM/clang 20, MPFR, RAPTOR and OpenEvolve built from the dev/tools submodules; ffmpeg and
 # matplotlib for the animation.
-# Build from mxp-optimization/; the repository is mounted at run time by dev/bin/container.
+# Build from mxp-optimization/; the repository is mounted at run time by the container verb (../tools/README.md).
 
 FROM ubuntu:24.04 AS toolchain
 

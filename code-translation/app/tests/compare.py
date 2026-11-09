@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare the diag lines of a run with tests/golden.out.
+"""Compare the diag lines of a run with app/tests/golden.out.
 
 Every number must agree within |a - b| <= atol + rtol * |b|.
 

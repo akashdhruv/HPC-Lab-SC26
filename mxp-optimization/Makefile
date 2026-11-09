@@ -1,4 +1,4 @@
-# mxp-optimization, run inside the hpc-lab-mxp container (dev/bin/container make ...): build the app
+# mxp-optimization, run inside the hpc-lab-mxp container (../tools/container make ...): build the app
 # with RAPTOR and run each step of the raptorize and optimize stages.
 #
 #   make [all|check|clean]             app/ (check FULL=1 adds the 15-minute test)

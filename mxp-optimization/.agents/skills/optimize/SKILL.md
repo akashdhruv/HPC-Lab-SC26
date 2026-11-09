@@ -10,7 +10,7 @@ emulation of a low precision, by searching rewrites with OpenEvolve. The objecti
 open-ended and no one knows the answer, but a score can be trusted: that is when a search beats
 a loop or a session. Instance R: `experiments/<E>/<n>-optimize/`. Precondition: raptorize
 accepted in the same E. Commands run from `mxp-optimization/`; everything runs in the container
-(`dev/bin/container`). The harness code is in `scripts/` next to this file (run.py, evaluation.py, animate.py).
+(`../tools/container`). The harness code is in `scripts/` next to this file (run.py, evaluation.py, animate.py).
 
 ## Plan mode
 
@@ -27,10 +27,10 @@ accepted in the same E. Commands run from `mxp-optimization/`; everything runs i
 | rules | types stay double, no library calls but min/max/abs, no preprocessor |
 | job | models from config.yaml `evolve`, max_programs 10, timeout 300 s |
 
-3. Calibrate: `dev/bin/container make evaluate EXP=<R>` twice, identical scores; put the seed score
+3. Calibrate: `../tools/container make evaluate EXP=<R>` twice, identical scores; put the seed score
    in the problem. The fp8 seed is NaN (`NAN_OR_INF`, score null): then two identical labels, and
    the search starts from it. The prompt states only rules the evaluator enforces.
-4. Red-team: `dev/bin/container make redteam EXP=<R>`, 0 holes.
+4. Red-team: `../tools/container make redteam EXP=<R>`, 0 holes.
 5. Show decisions, calibration and red-team; the scientist approves with `../tools/approve <R> plan`.
 
 ## Run mode
@@ -39,13 +39,13 @@ accepted in the same E. Commands run from `mxp-optimization/`; everything runs i
    `hpc-lab-mxp-optimization` (it refuses an unapproved plan or a second search); it outlives
    the session. From any session: `dev/bin/evolve --status <R>` (running or not, scores, log),
    `--stop <R>` ends it, `--resume <R>` continues from the last checkpoint.
-2. Verify: `dev/bin/container make harvest EXP=<R>` (each candidate and its diff against the seed
+2. Verify: `../tools/container make harvest EXP=<R>` (each candidate and its diff against the seed
    in results/candidates/); for the top 3, read the diff and say why the rewrite reduces rounding
    error while staying exact in real arithmetic; re-score the best.
 3. Show: `dev/bin/animate <R> <id>` runs fp64, the seed and the candidate in fp8 and writes
    `<R>/results/animation.mp4` (the bubble and its error, seed next to candidate).
 4. Acceptance: the scientist records `../tools/approve <R> "candidate <id>"`; then
-   `dev/bin/container make apply EXP=<R> ID=<id>`.
+   `../tools/container make apply EXP=<R> ID=<id>`.
 
 ## Checks (the verification boundary)
 
@@ -57,7 +57,7 @@ accepted in the same E. Commands run from `mxp-optimization/`; everything runs i
 
 - May write: R (except approvals.toml); app/ only through `make apply`.
 - One search at a time: each evaluation swaps a candidate into app/.
-- Never write `approvals.toml` or run `tools/approve`.
+- Never write `approvals.toml` or run `../tools/approve`.
 
 ## Provenance
 

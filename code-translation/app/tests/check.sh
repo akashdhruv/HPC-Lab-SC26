@@ -6,7 +6,7 @@
 set -o pipefail
 
 tests="$(cd "$(dirname "$0")" && pwd)"
-app="$tests/../app"
+app="$tests/.."
 output="$(mktemp)"
 trap 'rm -f "$output"' EXIT
 

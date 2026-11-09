@@ -1,16 +1,16 @@
-# Task of translate for the lab's loop (tools/loop.py): dev/bin/loop translate.
+# Task of app-translate for code-translation's loop (dev/tools/loop.py): dev/bin/loop app-translate.
 
 [tools]
 bash = ["readiness", "oracle", "build", "rm", "cat", "diff"]
 protect = [
-  "dev/transformations/translate/desired_spec.md",
-  "dev/transformations/translate/current_plan.md",
-  "dev/transformations/translate/approvals.toml",
-  "tests/*",
+  "transformations/app-translate/desired_spec.md",
+  "transformations/app-translate/current_plan.md",
+  "transformations/app-translate/approvals.toml",
+  "app/tests/*",
   "app/Makefile",
   "app/include/*",
 ]
-writable = ["dev/transformations/translate/agent_log.md"]
+writable = ["transformations/app-translate/agent_log.md"]
 
 [check]
 command = "python dev/bin/oracle"
@@ -18,7 +18,7 @@ timeout = 300
 
 [[chat.user]]
 content = '''
-Work on the transformation in dev/transformations/translate/ from code-translation/: read
+Work on the transformation in transformations/app-translate/ from code-translation/: read
 current_plan.md, then desired_spec.md, agent_log.md and approvals.toml. Do one author
 session of the Plan: settle one unit, or fix what the review reports.
 

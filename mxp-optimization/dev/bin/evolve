@@ -1,64 +1,16 @@
 #!/bin/sh
-''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
-# The OpenEvolve search of an approved optimize run, in the detached container
-# hpc-lab-mxp-optimization: it outlives the session that starts it, so close the session and
-# come back with --status. One search at a time.
-#
-#   dev/bin/evolve <R>             start it
-#   dev/bin/evolve --status <R>    running or not, scores so far, the tail of <R>/results/evolve.log
-#   dev/bin/evolve --stop <R>      stop it; the search records its state
-#   dev/bin/evolve --resume <R>    continue from the last checkpoint
-import json
+"export" "MSYS_NO_PATHCONV=1"
+"exec" "$(python3 -c '' 2>/dev/null && echo python3 || echo python)" "$0" "$@"
+# The OpenEvolve search of an optimize run, detached.
+# Runs Mxp.evolve (mxp-optimization/dev/tools.py); --help for its usage.
+# Lines 2-3 rerun this file under python3 (or python) from any shell; to Python they are strings.
+
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
-from hpclab import Approvals, Container, Job
+root = next(p for p in Path(__file__).resolve().parents if (p / "tools" / "hpclab.py").is_file())
+sys.path.insert(0, str(root / "tools"))
 
+import hpclab
 
-class Search:
-    """
-    The search of one run R, in the system's detached container
-    """
-
-    def __init__(self, run):
-        self.run = Path(run).as_posix().rstrip("/")
-        self.results = Path(self.run) / "results"
-        self.container = Container.of(__file__)
-
-    def start(self, action="evolve"):
-        Approvals(self.run).require("plan")
-        if self.container.running():
-            sys.exit(f"a search is already running in {self.container.name}; dev/bin/evolve --status <R>")
-        if self.container.run(["dev/tools/search.sh", self.run, action], detach=True) == 0:
-            print(f"search started in {self.container.name}; dev/bin/evolve --status {self.run}")
-
-    def resume(self):
-        self.start("resume")
-
-    def stop(self):
-        if not self.container.running():
-            sys.exit("no search running")
-        self.container.stop()
-        print(f"search stopped; dev/bin/evolve --resume {self.run} continues it")
-
-    def status(self):
-        running = self.container.running()
-        print(f"container  {self.container.name} {'running' if running else 'not running'}")
-        state = self.results / "status.json"
-        if not running and state.is_file() and json.loads(state.read_text()).get("state") == "running":
-            print(f"           the search was killed; dev/bin/evolve --resume {self.run} continues it")
-        sys.stdout.flush()
-        self.container.run(["make", "status", f"EXP={self.run}"])
-        print(f"== {self.results.as_posix()}/evolve.log")
-        print(Job(self.results, "evolve").tail() or "empty")
-
-
-if __name__ == "__main__":
-    flags = {"--status": "status", "--stop": "stop", "--resume": "resume"}
-    argv = sys.argv[1:]
-    action = flags.get(argv[0], "start") if argv else None
-    argv = argv[1:] if action != "start" else argv
-    if len(argv) != 1:
-        sys.exit("usage: dev/bin/evolve [--status|--stop|--resume] <R>")
-    getattr(Search(argv[0]), action)()
+hpclab.main(__file__)

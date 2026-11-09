@@ -1,5 +1,5 @@
 # Native python of the agent systems, installed into .venv by tools/setup.
-# CodeScribe is pinned: tools/loop.py builds on its library primitives (Agent, tools, telemetry).
+# CodeScribe is pinned: the systems' harnesses (code-translation/dev/tools/loop.py) build on its library primitives (Agent, tools, telemetry).
 CodeScribe @ git+https://github.com/akashdhruv/CodeScribe.git@5445cebac403bbffd09e48dd99e5e1df818613c2
 pyyaml
 toml

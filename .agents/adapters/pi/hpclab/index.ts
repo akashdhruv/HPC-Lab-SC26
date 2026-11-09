@@ -1,4 +1,4 @@
-// Shared pi extension: hpclab provider from config.yaml, .venv on PATH, header, compact tool output, approvals guard, /hpclab.
+// Shared pi extension: hpclab provider from config.yaml, .venv (and dev/bin) on PATH, header, compact tool output, approvals guard, /hpclab.
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { basename } from "node:path";
 import { Config, MODEL, PROVIDER } from "./config";
@@ -9,7 +9,7 @@ import { Venv } from "./venv";
 export default function (pi: ExtensionAPI) {
 	const root = process.cwd();
 	const config = new Config(root);
-	new Venv(config.path).engage();
+	new Venv(config.path).engage(root, config.devBinOnPath);
 	if (!config.problem) pi.registerProvider(PROVIDER, config.provider());
 	new CompactTools(pi, root).register();
 	guardApprovals(pi);

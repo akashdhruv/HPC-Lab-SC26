@@ -1,4 +1,4 @@
-# Spec: translate
+# Spec: app-translate
 
 Translate all 13 Fortran units in `app/src` to C++ while preserving the application's numerical behavior.
 
@@ -6,8 +6,8 @@ Translate all 13 Fortran units in `app/src` to C++ while preserving the applicat
 
 - Objective: every unit in scope is replaced by C++ and logged `verified`.
 - Invariants, after every unit: `build` succeeds; `oracle` passes; the remaining Fortran
-  still links; `tests/` and `app/Makefile` are unchanged.
-- Oracle: `oracle` (tests/check.sh in the container): clean build, one run, every `diag` number within rtol
+  still links; `app/tests/` and `app/Makefile` are unchanged.
+- Oracle: `oracle` (app/tests/check.sh in the container): clean build, one run, every `diag` number within rtol
   1e-12 of the original Fortran's output. Run it; never infer it.
 
 | status | meaning | evidence |
