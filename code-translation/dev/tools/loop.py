@@ -11,8 +11,10 @@ decides when to stop:
   - rules: added and retired by the reviewer. `deny_bash` refuses matching author commands;
     `protect` locks a file while the rule is active ([tools].writable files can never be locked).
   - check: [check].command runs after every author session; its exit code is ground truth.
-  - stop: the author reports COMPLETE and the check passes, or a clean review and the check passes;
-    "stalled" after `stall` loops without progress; else when the loop budget runs out.
+  - stop: the author reports COMPLETE and the check passes (the task decides when: a session settles
+    one unit, so a clean review is progress, not the end); "stalled" after `stall` loops without
+    progress (a change the review accepts, or that resolves items or fixes the check); else when
+    the loop budget runs out.
 """
 
 import fnmatch
@@ -94,7 +96,6 @@ class Loop:
             self.task.chat = lib.load_chat_template(self.task.path)  # the human may edit it between loops
             session = self.author(loop, loops)
             self.done = loop
-            check_passed = session.check is None or session.check.passed
 
             if session.status() == "COMPLETE" and session.check and session.check.passed:
                 self.items, self.blocker = [], ""
@@ -105,11 +106,7 @@ class Loop:
             self.score(session, resolved or 0)
             self.persist(loops)
 
-            reviewed = resolved is not None
-            if reviewed and check_passed and not self.items and not self.blocker:
-                self.stop_reason = "complete"
-                return
-            if self.stalled():
+            if self.stalled():  # a clean review is progress, not the end: only the author says COMPLETE
                 self.stop_reason = "stalled"
                 return
 
@@ -282,7 +279,8 @@ class Loop:
         previous = self.scores[-1] if self.scores else None
         passed = session.check.passed if session.check else None
         newly_passing = bool(passed) and not (previous and previous.get("check_passed"))
-        progress = session.changed and (previous is None or resolved > 0 or newly_passing)
+        clean = bool(passed) and not self.items and not self.blocker  # the review accepted the change
+        progress = session.changed and (previous is None or resolved > 0 or newly_passing or clean)
         score = {"loop_index": session.loop, "changed": session.changed, "resolved": resolved,
                  "open_items": len(self.items), "progress": progress}
         if passed is not None:
