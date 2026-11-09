@@ -5,7 +5,7 @@ import platform
 import signal
 import sys
 
-from hpclab import Approvals, Config, Job, Venv, parent, windows_tools
+from lab import Approvals, Config, Job, Venv, parent, windows_tools
 
 
 class Translation(parent(__file__)):

@@ -3,7 +3,7 @@
 A tool is a public method of a level's class, run by a stub file of the same name:
 
     tools/<tool>               the root's tools: class Lab, below
-    <system>/dev/bin/<tool>    a system's tools: class <System>(Lab) in <system>/dev/tools.py
+    <system>/dev/bin/<tool>    a system's tools: class <System>(Lab) in <system>/dev/lab.py
 
 A system inherits Lab's tools and may override them. Pure Python (>= 3.8, stdlib only; PyYAML for
 config.yaml), so every tool behaves the same on Windows, macOS and Linux.
@@ -32,12 +32,12 @@ WINDOWS = os.name == "nt"
 
 class Level:
     """
-    The root or a system (a folder with dev/tools.py). Its class inherits the class of the level
-    above it, so its tools (public methods) are inherited along the directory tree.
+    The root or a system (a folder with dev/lab.py). Only two levels exist: the root and its
+    direct system children. A system's class subclasses Lab.
     """
 
     image = None  # the level's docker image; a system sets it
-    loaded = {}  # dev/tools.py -> its Level class
+    loaded = {}  # dev/lab.py -> its Level class
 
     def __init__(self, path):
         self.path = Path(path).resolve()
@@ -57,9 +57,12 @@ class Level:
     @property
     def children(self):
         """
-        The systems directly below this level
+        The systems directly below the root (a system has none)
         """
-        return [Level.at(p) for p in sorted(self.path.iterdir()) if (p / "dev" / "tools.py").is_file()]
+        if self.path != ROOT:
+            return []
+        return [Level.at(p) for p in sorted(self.path.iterdir())
+                if (p / "dev" / "lab.py").is_file()]
 
     def walk(self):
         """
@@ -102,23 +105,27 @@ def stub_folder(level):
 
 def find_level(path):
     """
-    The deepest level that holds path: the nearest folder with dev/tools.py, else the root
+    The level holding path: the system directly below the root that contains it, else the root
     """
     path = Path(path).resolve()
+    if ROOT not in (path, *path.parents):
+        sys.exit(f"{path} is outside {ROOT}")
     for folder in [path, *path.parents]:
-        if folder == ROOT or (folder / "dev" / "tools.py").is_file():
+        if folder != ROOT and folder.parent == ROOT and (folder / "dev" / "lab.py").is_file():
             return folder
-    sys.exit(f"{path} is outside {ROOT}")
+    return ROOT
 
 
 def level_class(folder):
     """
-    The class of a level: Lab for the root, else the one Level subclass in its dev/tools.py
+    The class of a level: Lab for the root, else the one Level subclass in its dev/lab.py
     """
     folder = Path(folder).resolve()
     if folder == ROOT:
         return Lab
-    file = folder / "dev" / "tools.py"
+    if folder.parent != ROOT or not (folder / "dev" / "lab.py").is_file():
+        sys.exit(f"{folder}: not a system (expected dev/lab.py directly under the root)")
+    file = folder / "dev" / "lab.py"
     if file not in Level.loaded:
         name = "level_" + re.sub(r"\W", "_", folder.relative_to(ROOT).as_posix())
         spec = importlib.util.spec_from_file_location(name, file)
@@ -135,10 +142,12 @@ def level_class(folder):
 
 def parent(file):
     """
-    The class a system's dev/tools.py inherits from:  class Translation(parent(__file__))
+    The class a system's dev/lab.py inherits from:  class Translation(parent(__file__))
     """
     system = Path(file).resolve().parents[1]
-    return level_class(find_level(system.parent))
+    if system.parent != ROOT:
+        sys.exit(f"{system}: systems must sit directly under the root")
+    return Lab
 
 
 # --- Stubs: how a stub file runs its tool ---------------------------------------------------------

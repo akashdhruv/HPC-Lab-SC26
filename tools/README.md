@@ -3,7 +3,7 @@
 Every tool of the tutorial is a public method of a class, called through a stub file. The classes
 follow the directory tree and inherit along it: the root's `Lab` is the base class, each agent
 system a subclass. The root holds only setup and what every system inherits; everything a system
-does is in its own `dev/`. This file is the contract; `hpclab.py` implements it.
+does is in its own `dev/`. This file is the contract; `lab.py` implements it.
 
 ```
 SC26-Tutorial/tools/        Lab                 setup approve container            (check)
@@ -13,19 +13,18 @@ mxp-optimization/dev/       Mxp(Lab)            new evolve patch animate        
 
 ## Levels
 
-A **level** is the root or a system. The root's class is `Lab` in `tools/hpclab.py`, its stubs are
-in `tools/`; a system is a directory with `dev/tools.py`. A level's parent is the nearest level
-above it.
+A **level** is the root or a system. The root's class is `Lab` in `tools/lab.py`, its stubs are
+in `tools/`; a system is a directory with `dev/lab.py`. Only two levels exist: the root and its direct system children.
 
 ```
 tools/                      the root
   setup approve container   stubs
-  hpclab.py                 class Lab; Level and dispatch; Venv, Job, Config, Approvals, Container
+  lab.py                 class Lab; Level and dispatch; Venv, Job, Config, Approvals, Container
   requirements.txt          .venv
   README.md                 this contract
 
 <system>/dev/
-  tools.py                  the system's class, the only Level subclass in the file:
+  lab.py                    the system's class, the only Level subclass in the file:
                               class Translation(parent(__file__)): ...
   bin/<tool>                a stub per tool the system adds or overrides
   tools/                    what its tools use: its harness (each system writes its own, e.g.
@@ -55,7 +54,7 @@ tools/                      the root
 ## Stubs and dispatch
 
 3. A stub is a declaration, not code: every stub is the same file (a sh/python polyglot that
-   finds the root and calls `hpclab.main(__file__)`), named after its tool; only its two comment
+   finds the root and calls `lab.main(__file__)`), named after its tool; only its two comment
    lines (what it does, which method it runs) differ. A level carries stubs only for the tools
    it **adds or overrides**; inherited tools are reached through the root's stub.
 4. A stub runs its tool on the **deepest level between the stub's level and the working
@@ -90,7 +89,7 @@ tools/                      the root
 - A tool to a system: a method on its class, then a stub in its `dev/bin/` (copy any stub).
 - An override: the method only; the root's stub already reaches it.
 - A shared tool: a method on `Lab` and a stub in `tools/`; every system inherits it.
-- A system: a folder with `AGENTS.md`, `.agents/skills/`, a `Dockerfile`, `dev/tools.py`
+- A system: a folder with `AGENTS.md`, `.agents/skills/`, a `Dockerfile`, `dev/lab.py`
   (`class X(parent(__file__))` with an `image` and a `check`), `dev/README.md`, `dev/app.md` and
   stubs for its tools. `tools/setup` builds and checks it with the others.
 - A dedicated agent system of its own: seed a new repo from this one, the root (`tools/`,

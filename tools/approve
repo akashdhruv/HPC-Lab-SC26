@@ -2,15 +2,15 @@
 "export" "MSYS_NO_PATHCONV=1"
 "exec" "$(python3 -c '' 2>/dev/null && echo python3 || echo python)" "$0" "$@"
 # Record a human approval (the scientist only).
-# Runs Lab.approve (tools/hpclab.py); --help for its usage.
+# Runs Lab.approve (tools/lab.py); --help for its usage.
 # Lines 2-3 rerun this file under python3 (or python) from any shell; to Python they are strings.
 
 import sys
 from pathlib import Path
 
-root = next(p for p in Path(__file__).resolve().parents if (p / "tools" / "hpclab.py").is_file())
+root = next(p for p in Path(__file__).resolve().parents if (p / "tools" / "lab.py").is_file())
 sys.path.insert(0, str(root / "tools"))
 
-import hpclab
+import lab
 
-hpclab.main(__file__)
+lab.main(__file__)

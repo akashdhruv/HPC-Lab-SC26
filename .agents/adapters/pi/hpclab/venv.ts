@@ -17,7 +17,7 @@ export class Venv {
 		const out: string[] = [];
 		for (let dir = start; ; dir = dirname(dir)) {
 			if (dir === this.root) return [...out, join(dir, "tools")];
-			if (existsSync(join(dir, "dev", "tools.py"))) out.push(join(dir, "dev", "bin"));
+			if (existsSync(join(dir, "dev", "lab.py"))) out.push(join(dir, "dev", "bin"));
 			if (dirname(dir) === dir) return out;
 		}
 	}

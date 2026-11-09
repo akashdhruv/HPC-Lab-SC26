@@ -1,7 +1,7 @@
 # mxp-optimization
 
 An agent system (Optimization thrust) for the Deforming Bubble mini-app in `app/` (WENO5 level
-set, MPI C++). Its tools: `dev/README.md` (class `Mxp(Lab)` in `dev/tools.py`); the interface an
+set, MPI C++). Its tools: `dev/README.md` (class `Mxp(Lab)` in `dev/lab.py`); the interface an
 application must meet: `dev/app.md`.
 
 Agents run natively; everything that builds or runs the app runs in the `hpc-lab-mxp` container

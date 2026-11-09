@@ -2,7 +2,7 @@
 
 An agent system (Translation thrust): Fortran -> C++ for `app/`, rd2d, a Gray-Scott
 reaction-diffusion mini-app of 13 Fortran units. Stage: translate, an autonomous loop. Its tools:
-`dev/README.md` (class `Translation(Lab)` in `dev/tools.py`); the interface an application must
+`dev/README.md` (class `Translation(Lab)` in `dev/lab.py`); the interface an application must
 meet: `dev/app.md`.
 
 Agents run natively; everything that builds or runs the app runs in the `hpc-lab-translate`

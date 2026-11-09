@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from hpclab import Approvals, Job, parent
+from lab import Approvals, Job, parent
 
 
 class Mxp(parent(__file__)):
