@@ -135,3 +135,7 @@ mxp-optimization/            AGENTS.md; app/ (Deforming Bubble, WENO5, FP64)
   dev/tools/                 RAPTOR, OpenEvolve (submodules)
   experiments/<E>/<n>-<stage>/   one folder per stage run
 ```
+
+## License
+
+Apache License 2.0; see [LICENSE](LICENSE). Submodules under `*/dev/tools/` keep their own licenses.
