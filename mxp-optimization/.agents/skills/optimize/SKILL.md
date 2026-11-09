@@ -36,9 +36,9 @@ accepted in the same E. Commands run from `mxp-optimization/`; everything runs i
 ## Run mode
 
 1. Act: `dev/bin/evolve <R>` starts the search in the detached container
-   `hpc-lab-mxp-optimization` (it refuses an unapproved plan); progress
-   `dev/bin/container make status EXP=<R>`; `docker stop hpc-lab-mxp-optimization` ends it
-   (`dev/bin/container make resume EXP=<R>` continues).
+   `hpc-lab-mxp-optimization` (it refuses an unapproved plan or a second search); it outlives
+   the session. From any session: `dev/bin/evolve --status <R>` (running or not, scores, log),
+   `--stop <R>` ends it, `--resume <R>` continues from the last checkpoint.
 2. Verify: `dev/bin/container make harvest EXP=<R>` (each candidate and its diff against the seed
    in results/candidates/); for the top 3, read the diff and say why the rewrite reduces rounding
    error while staying exact in real arithmetic; re-score the best.

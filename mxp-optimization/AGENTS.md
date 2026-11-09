@@ -10,4 +10,5 @@ Agents run natively; everything that builds or runs the app runs in the `hpc-lab
   modes, an FP64 shadow and an EVOLVE-BLOCK for `advectWeno`.
 - optimize (OpenEvolve search, skill `.agents/skills/optimize/SKILL.md`): the kernel made more
   accurate under bf16.
-- Entry points: `dev/bin/container`, `dev/bin/patch` (raptorize checkpoints), `dev/bin/evolve` (search).
+- Entry points: `dev/bin/container`, `dev/bin/patch` (raptorize checkpoints), `dev/bin/evolve` (search, detached:
+  `--status`, `--stop`, `--resume`).

@@ -15,7 +15,7 @@ instance's files), and raptorize's `examples/` (worked example, reference.patch)
 - `tools/RAPTOR`, `tools/OpenEvolve`: submodules, built into the `hpc-lab-mxp` image (Dockerfile);
   `tools/search.sh` is the search inside a detached container.
 - `bin/new` makes a stage's instance R, `bin/container` runs a command in the image,
-  `bin/evolve` starts an approved search,
+  `bin/evolve` starts an approved search detached (`--status`, `--stop`, `--resume` from any session),
   `bin/patch` saves app's state at a checkpoint, `bin/animate` shows a candidate against the
   seed (`<R>/results/animation.mp4`).
 - `../experiments/<E>/<n>-<stage>/`: one instance per run, its provenance record.

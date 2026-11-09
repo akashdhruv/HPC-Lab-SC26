@@ -16,9 +16,11 @@ written; the scientist reviews and approves it.
     scientist            agent        agent                      scientist
 
 - `../tools/approve dev/transformations/translate plan`, then `"Group <k>"`: scientist only.
-- `dev/bin/loop [-b] translate`: the autonomous loop (`../tools/loop.py` on CodeScribe in
-  `.venv`, model from config.yaml); it refuses an unapproved plan and stops at the end of a group.
-- `dev/bin/status [translate]`: approvals, groups, agent log, loop runs.
+- `dev/bin/loop translate`: the autonomous loop (`../tools/loop.py` on CodeScribe in `.venv`,
+  model from config.yaml), detached from the session; it refuses an unapproved plan or a second
+  copy and stops at the end of a group. `-f` runs it in the foreground, `--stop` stops it.
+- `dev/bin/status [translate]`: approvals, groups, agent log, the loop (running or not, its log,
+  its last runs).
 - Skills: `csloop` (start the loop), `csloop-status` (report, and verify a stopped loop).
 - The loop writes `app/src` and `agent_log.md`; the harness reverts any change to the spec,
   plan, approvals, `loop.toml`, `tests/`, `app/Makefile` and `app/include/`. Each run is

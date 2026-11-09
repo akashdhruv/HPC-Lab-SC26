@@ -62,7 +62,8 @@ Code, Codex, OpenCode or a bespoke runtime, with any model, and can be compared 
 system is described only by `AGENTS.md` and `.agents/`; `tools/setup` links the folders Claude
 Code (`.claude/`) and pi (`.pi/`) expect. Harnesses that must behave the same whoever starts them
 (the translate loop, the OpenEvolve search) are the system's own code and call the model in
-`config.yaml`. Approvals are the scientist's alone: `tools/approve`, never the agent.
+`config.yaml`. They run detached from the session that starts them: close it, come back later
+and probe them with `dev/bin/status` (loop) or `dev/bin/evolve --status <run>` (search). Approvals are the scientist's alone: `tools/approve`, never the agent.
 
 ## Quickstart
 

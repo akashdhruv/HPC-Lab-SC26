@@ -457,26 +457,32 @@ class Loop:
         lib.write_loop_manifest(self.record / "metadata", run_doc=doc, phase_files=self.phases)
 
     def run(self, loops=10):
-        done = 0
+        self.done = 0
+        try:
+            self.loops(loops)
+        except KeyboardInterrupt:  # Ctrl-C or dev/bin/loop --stop
+            self.stop_reason = "stopped"
+        self.persist(loops, self.done)
+        self.say(f"\n= {self.stop_reason} after {self.done}/{loops} loop(s)")
+        return self
+
+    def loops(self, loops):
         for loop in range(1, loops + 1):
             self.task.chat = lib.load_chat_template(self.task.path)
             s = self.author(loop, loops)
-            done = loop
+            self.done = loop
             if s.status() == "COMPLETE" and s.check and s.check.passed:
                 self.items, self.blocker, self.stop_reason = [], "", "complete"
                 break
             resolved = self.review(loop, s)
             self.score(s, resolved or 0)
-            self.persist(loops, done)
+            self.persist(loops, self.done)
             if resolved is not None and (not s.check or s.check.passed) and not self.items and not self.blocker:
                 self.stop_reason = "complete"
                 break
             if self.stalled():
                 self.stop_reason = "stalled"
                 break
-        self.persist(loops, done)
-        self.say(f"\n= {self.stop_reason} after {done}/{loops} loop(s)")
-        return self
 
     # -- prompts
 

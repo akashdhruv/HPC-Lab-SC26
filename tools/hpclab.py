@@ -89,6 +89,65 @@ def detached():
     return {"start_new_session": True}
 
 
+class Job:
+    """
+    A harness run on the host, detached from the session that starts it: <folder>/<name>.pid and
+    <name>.log, so a later session can probe it, follow its log or stop it
+    """
+
+    def __init__(self, folder, name):
+        self.folder = Path(folder)
+        self.pidfile, self.log = self.folder / f"{name}.pid", self.folder / f"{name}.log"
+
+    @staticmethod
+    def alive(pid):
+        if WINDOWS:  # os.kill(pid, 0) would terminate it
+            out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout
+            return str(pid) in out.split()
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            pass
+        return True
+
+    @property
+    def pid(self):
+        """
+        The pid of the running job, or None
+        """
+        text = self.pidfile.read_text().strip() if self.pidfile.is_file() else ""
+        return int(text) if text.isdigit() and self.alive(int(text)) else None
+
+    def state(self):
+        return f"running (pid {self.pid})" if self.pid else "not running"
+
+    def start(self, command, cwd):
+        if self.pid:
+            sys.exit(f"already {self.state()}; stop it first")
+        self.folder.mkdir(parents=True, exist_ok=True)
+        env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+        with open(self.log, "a") as log:
+            process = subprocess.Popen(command, cwd=cwd, stdin=subprocess.DEVNULL, stdout=log,
+                                       stderr=subprocess.STDOUT, env=env, **detached())
+        self.pidfile.write_text(str(process.pid))
+        return process.pid
+
+    def stop(self):
+        """
+        SIGTERM (TerminateProcess on Windows): the harness records its state and exits
+        """
+        pid = self.pid or sys.exit("not running")
+        import signal
+
+        os.kill(pid, signal.SIGTERM)
+        return pid
+
+    def tail(self, n=6):
+        return "\n".join(self.log.read_text().splitlines()[-n:]) if self.log.is_file() else ""
+
+
 def windows_tools():
     """
     On Windows, Git for Windows' usr/bin (ls, grep, sed, cat, diff ...) for commands run by cmd.exe
@@ -175,6 +234,17 @@ class Container:
 
     def __init__(self, system):
         self.system, self.image = system, self.IMAGES[system]
+        self.name = f"hpc-lab-{system}"  # of the detached container: one at a time per system
+
+    def running(self):
+        out = subprocess.run(["docker", "ps", "-q", "-f", f"name=^{self.name}$"], capture_output=True, text=True)
+        return bool(out.stdout.strip())
+
+    def stop(self):
+        """
+        SIGTERM to the detached container, SIGKILL after 30 s
+        """
+        return subprocess.call(["docker", "stop", "-t", "30", self.name], stdout=subprocess.DEVNULL)
 
     @classmethod
     def of(cls, path):
@@ -198,7 +268,7 @@ class Container:
         if os.environ.get("MAX_PROGRAMS"):
             options += ["-e", f"MAX_PROGRAMS={os.environ['MAX_PROGRAMS']}"]
         if detach:
-            options += ["-d", "--name", f"hpc-lab-{self.system}"]
+            options += ["-d", "--name", self.name]
         return ["docker", "run", *options, self.image, *args]
 
     def run(self, args, detach=False):
@@ -206,7 +276,7 @@ class Container:
 
     def main(self, argv):
         """
-        <command ...> or -d <command ...> (detached, as the container hpc-lab-<system>)
+        <command ...> or -d <command ...> (detached, as the container self.name)
         """
         detach = bool(argv) and argv[0] == "-d"
         args = argv[1:] if detach else argv

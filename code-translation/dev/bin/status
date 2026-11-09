@@ -1,12 +1,16 @@
 #!/bin/sh
 ''''command -v python3 >/dev/null 2>&1 && python3 -c '' 2>/dev/null && MSYS_NO_PATHCONV=1 exec python3 "$0" "$@"; MSYS_NO_PATHCONV=1 exec python "$0" "$@" # '''
-# State of a transformation: approvals, groups, agent log, and its loop runs.
+# State of a transformation: approvals, groups, agent log, and its loop: running or not, its log
+# and its last runs. Works from any session, while the detached loop runs or after it stopped.
 #
 #   dev/bin/status [name]
 import sys
 from pathlib import Path
 
 SYSTEM = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(SYSTEM.parent / "tools"))
+from hpclab import Job
+
 ROOT = SYSTEM / "dev" / "transformations"
 
 
@@ -27,8 +31,9 @@ print("== groups")
 print("\n".join(lines("current_plan.md", "- Group")))
 print("== agent log")
 print(tail(task / "agent_log.md") or "empty")
-print("== loop")
-print(tail(task / "runs" / "loop.log") or "not run")
+job = Job(task / "runs", "loop")
+print(f"== loop: {job.state()}")
+print(job.tail() or "not run")
 runs = sorted((task / "runs").glob("*/run.toml"), key=lambda p: p.stat().st_mtime)
 for run in runs[-3:]:
     keep = ("run_id", "model", "loops_completed", "stop_reason")
