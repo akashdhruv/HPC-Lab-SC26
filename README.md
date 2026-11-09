@@ -64,12 +64,12 @@ system is described only by `AGENTS.md` and `.agents/`; `tools/setup` links the 
 Code (`.claude/`) and pi (`.pi/`) expect. Harnesses that must behave the same whoever starts them
 (the translate loop, the OpenEvolve search) are the system's own code and call the model in
 `config.yaml`. They run detached from the session that starts them: close it, come back later
-and probe them with `dev/bin/status` (loop) or `dev/bin/evolve --status <run>` (search).
-Approvals are the scientist's alone: `tools/approve`, never the agent.
+and probe them with `status` (loop) or `evolve --status <run>` (search).
+Approvals are the scientist's alone: `approve`, never the agent.
 
 Tools are methods of classes that follow the directory tree: `tools/hpclab.py` holds `Lab`, the
 root; each system subclasses it in its `dev/tools.py` and adds a stub in `dev/bin/` only for the
-tools it adds or overrides, so `../tools/container` from a system runs in that system's image. A
+tools it adds or overrides, so `container` from a system runs in that system's image. A
 system's `dev/` holds tools only; what it produces lives beside it, in `transformations/`
 (approved, rerunnable procedures) or `experiments/` (records of open-ended work).
 [tools/README.md](tools/README.md) is the contract.
@@ -94,10 +94,10 @@ cd code-translation && pi        # or: claude, codex, opencode
 ```
 
     > Show me the translate plan.          (review transformations/app-translate/)
-    > !../tools/approve transformations/app-translate plan
+    > !approve transformations/app-translate plan
     > Start the loop.                       (skill loop: asks which transformation; stops at the end of a group)
     > How is the loop doing?                (skill loop-status: report and verify)
-    > !../tools/approve transformations/app-translate "Group 1"
+    > !approve transformations/app-translate "Group 1"
 
 **Optimization** — mixed precision with RAPTOR, then an evolutionary search:
 
@@ -106,14 +106,15 @@ cd mxp-optimization && claude    # or: pi, codex, opencode
 ```
 
     > raptorize, plan mode                  (writes the plan in experiments/<E>/<n>-raptorize/)
-    > !../tools/approve <run> plan
+    > !approve <run> plan
     > raptorize, run mode                   (three checkpoints, ends with a results table)
-    > !../tools/approve <run> result
-    > optimize, plan mode                   (then approve, dev/bin/evolve <run>, accept a candidate)
+    > !approve <run> result
+    > optimize, plan mode                   (then approve, evolve <run>, accept a candidate)
 
-`!<line>` runs a shell line in any orchestrator; in pi, skills are also `/skill:<name>`. Each
-system's `AGENTS.md` has the details, and `mxp-optimization/dev/README.md` walks through its
-stages.
+`!<line>` runs a shell line in any orchestrator; in pi, skills are also `/skill:<name>`. With
+`orchestrator.dev_bin_on_path: true` in `config.yaml`, every tool is on the PATH by name, without
+a `dev/bin/` or `../tools/` prefix. Each system's `AGENTS.md` has the details, and
+`mxp-optimization/dev/README.md` walks through its stages.
 
 ## Layout
 
