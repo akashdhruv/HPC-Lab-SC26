@@ -14,7 +14,8 @@ accepted in the same E. Commands run from `mxp-optimization/`; everything runs i
 
 ## Plan mode
 
-1. `dev/bin/new optimize <same E>` prints R.
+1. `dev/bin/new optimize <same E> [source]` prints R. `source` defaults to `app/src/advect.cpp`;
+   pass the raptorized kernel (e.g. `app/src/redistance.cpp`) to target another kernel.
 2. Ask (proposing a default for each, explained plainly) and fill R's plan.md (including who
    planned it: your orchestrator and model), experiment.yaml and evaluator.py; match the mode
    and columns raptorize added:

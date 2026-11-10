@@ -1,6 +1,8 @@
 # <R>: the search. Rules here == rules in evaluator.py. Endpoint and models: config.yaml.
 
 title: "WENO5 advection kernel in fp8 (RAPTOR) that matches the original in fp64"
+source: app/src/advect.cpp
+object: advect.o
 max_programs: 10
 timeout: 300
 

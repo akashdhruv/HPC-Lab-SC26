@@ -24,7 +24,6 @@ import yaml
 HERE = Path(__file__).resolve().parent
 MXP = HERE.parents[3]  # .agents/skills/optimize/scripts
 TUTORIAL = HERE.parents[4]
-SEED = MXP / "app" / "src" / "advect.cpp"
 FAILED = -1e12
 
 # Red-team edits inside the EVOLVE-BLOCK: (name, old, new); an empty old prepends new
@@ -74,6 +73,10 @@ class Run:
     def __init__(self, path):
         self.path = Path(path).resolve()
         self.results = self.path / "results"
+        spec = yaml.safe_load((self.path / "experiment.yaml").read_text()) or {}
+        self.source_rel = spec.get("source", "app/src/advect.cpp")
+        self.source = MXP / self.source_rel
+        self.seed_file = self.path / "seed.cpp"
 
     def approved(self, item):
         """
@@ -95,9 +98,9 @@ class Run:
         """
         Exit if app/ does not hold the seed (a stopped search may leave a candidate)
         """
-        if SEED.read_bytes() != (self.path / "seed.cpp").read_bytes():
+        if self.source.read_bytes() != self.seed_file.read_bytes():
             sys.exit(
-                f"app/src/advect.cpp is not the seed: make restore EXP={self.name()}"
+                f"{self.source_rel} is not the seed: make restore EXP={self.name()}"
             )
 
     def score(self, source):
@@ -131,17 +134,18 @@ class Run:
         Every cheat must score null or below the seed; the table goes to results/redteam.md
         """
         self.check_seed()
-        seed = SEED.read_text()
+        seed = self.source.read_text()
         start = seed.index("// EVOLVE-BLOCK-START\n") + len("// EVOLVE-BLOCK-START\n")
         head, block = seed[:start], seed[start:]
 
         cheats = []
-        for name, old, new in CHEATS:
-            edited = block.replace(old, new, 1) if old else new + block
-            cheats.append((name, head + edited))
-        cheats.append(
-            ("outside", seed.replace("#include <cstddef>", "#include <cstddef> // x"))
-        )
+        if self.source_rel == "app/src/advect.cpp":
+            for name, old, new in CHEATS:
+                edited = block.replace(old, new, 1) if old else new + block
+                cheats.append((name, head + edited))
+        marker = "#include <cstddef>"
+        if marker in seed:
+            cheats.append(("outside", seed.replace(marker, marker + " // x", 1)))
 
         base, label = self.score(seed)
         shown = label if base is None else f"{base:.3f}"
@@ -222,8 +226,8 @@ class Run:
         output.mkdir(parents=True, exist_ok=True)
 
         if checkpoint is None:
-            shutil.copy(SEED, program)
-            base, label = self.score(SEED.read_text())
+            shutil.copy(self.seed_file, program)
+            base, label = self.score(self.seed_file.read_text())
             if base is None and label != "NAN_OR_INF":  # a NaN seed is the search's first problem
                 self.record("failed")
                 sys.exit(f"the seed does not score: {label}")
@@ -340,14 +344,14 @@ class Run:
         Copy an approved candidate over the seed, then make check
         """
         self.approved(f"candidate {candidate}")
-        shutil.copy(self.results / "candidates" / f"{candidate}.cpp", SEED)
+        shutil.copy(self.results / "candidates" / f"{candidate}.cpp", self.source)
         subprocess.run(["make", "check"], cwd=MXP, check=True)
 
     def restore(self):
         """
         Put the seed back in app/
         """
-        shutil.copy(self.path / "seed.cpp", SEED)
+        shutil.copy(self.seed_file, self.source)
 
     def latest(self):
         """

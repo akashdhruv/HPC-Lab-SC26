@@ -21,10 +21,11 @@ class Mxp(parent(__file__)):
         """
         return self.docker.run(["make", "check"])
 
-    def new(self, stage, experiment):
+    def new(self, stage, experiment, source="app/src/advect.cpp"):
         """
         Make the next instance of a stage (raptorize|optimize), experiments/<E>/<n>-<stage>, from its
-        skill's templates/; prints R. optimize also gets seed.cpp, the raptorized app/src/advect.cpp.
+        skill's templates/; prints R. optimize also gets seed.cpp from `source` (relative to app/,
+        default app/src/advect.cpp) and records it in experiment.yaml.
         """
         templates = self.path / ".agents" / "skills" / stage / "templates"
         if not templates.is_dir():
@@ -42,7 +43,16 @@ class Mxp(parent(__file__)):
             text = template.read_text().replace("<R>", name).replace("<date>", str(datetime.date.today()))
             (run / template.name).write_text(text)
         if stage == "optimize":
-            shutil.copy(self.path / "app" / "src" / "advect.cpp", run / "seed.cpp")
+            source_path = self.path / source
+            if not source_path.is_file():
+                sys.exit(f"source not found: {source}")
+            shutil.copy(source_path, run / "seed.cpp")
+            experiment_file = run / "experiment.yaml"
+            text = experiment_file.read_text()
+            text = text.replace("source: app/src/advect.cpp", f"source: {source}")
+            obj = Path(source).stem + ".o"
+            text = text.replace("object: advect.o", f"object: {obj}")
+            experiment_file.write_text(text)
         print(name)
 
     def evolve(self, *args):
