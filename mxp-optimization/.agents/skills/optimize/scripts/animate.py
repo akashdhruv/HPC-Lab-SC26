@@ -14,6 +14,8 @@ import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+
+import yaml
 from pathlib import Path
 
 import matplotlib
@@ -30,7 +32,6 @@ from matplotlib.animation import FFMpegWriter, FuncAnimation
 HERE = Path(__file__).resolve().parent
 MXP = HERE.parents[3]  # .agents/skills/optimize/scripts
 APP = MXP / "app"
-KERNEL = APP / "src" / "advect.cpp"
 
 RUN = "mpirun --oversubscribe -n 4 ./bubble params/bubble.ini"
 CASE = "nx=64 ny=64 tmax=0.5"  # the eval run of the optimize template
@@ -48,6 +49,8 @@ class Animation:
         self.out = self.path / "results" / "animation"
         evaluator = (self.path / "evaluator.py").read_text()
         self.mode = re.search(r'^MODE = "(\w+)"', evaluator, re.M).group(1)
+        spec = yaml.safe_load((self.path / "experiment.yaml").read_text()) or {}
+        self.kernel_path = MXP / spec.get("source", "app/src/advect.cpp")
 
     def run(self, candidate=None):
         """
@@ -57,7 +60,7 @@ class Animation:
         if status.is_file() and json.loads(status.read_text())["state"] == "running":
             sys.exit("a search is running in app/: wait for it or stop it first")
 
-        source = self.path / "results" / "candidates" / f"{candidate}.cpp" if candidate else KERNEL
+        source = self.path / "results" / "candidates" / f"{candidate}.cpp" if candidate else self.kernel_path
         label = f"candidate {candidate}" if candidate else "applied candidate"
         seed = self.path / "seed.cpp"
         if source.read_bytes() == seed.read_bytes():
@@ -79,8 +82,8 @@ class Animation:
         """
         Build app/ with source as the kernel and run each mode; returns {mode: outdir}
         """
-        original = KERNEL.read_bytes()
-        shutil.copy(source, KERNEL)
+        original = self.kernel_path.read_bytes()
+        shutil.copy(source, self.kernel_path)
         try:
             shell(["make", "RAPTOR=1", "-j4"], MXP)
             outdirs = {}
@@ -92,7 +95,7 @@ class Animation:
                 command = [*RUN.split(), *CASE.split(), *FRAMES.split()]
                 shell([*command, f"precision={mode}", f"outdir={outdirs[mode]}"], APP)
         finally:
-            KERNEL.write_bytes(original)
+            self.kernel_path.write_bytes(original)
         return outdirs
 
     def render(self, runs, label, movie):
