@@ -9,6 +9,7 @@ protect = [
   "app/tests/*",
   "app/Makefile",
   "app/include/*",
+  "dev/**/*",
 ]
 writable = ["transformations/app-translate/agent_log.md"]
 

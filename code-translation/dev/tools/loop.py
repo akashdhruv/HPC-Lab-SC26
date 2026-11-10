@@ -63,6 +63,9 @@ class Loop:
         self.record = self.instance / "runs" / self.id
         self.review_file = self.record / "review.toml"
         (self.record / "metadata").mkdir(parents=True, exist_ok=True)
+        agent_log = self.instance / "agent_log.md"
+        if not agent_log.exists():
+            agent_log.write_text("")
 
         # what the harness enforces
         self.workspace = Workspace(self.workdir)
@@ -591,6 +594,8 @@ class Guard:
                 try:
                     path = within(path, self.root)
                 except ValueError:
+                    continue
+                if path.is_dir():
                     continue
                 if path not in found:
                     found.append(path)
