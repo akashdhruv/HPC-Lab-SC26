@@ -25,6 +25,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WINDOWS = os.name == "nt"
+MIN_PYTHON = (3, 10)
 
 
 # --- Levels: the root and the systems, as a class hierarchy ---------------------------------------
@@ -235,9 +236,9 @@ class Lab(Level):
         --native) the submodules, and the image and check of every system
         """
         need("git", "Git; on Windows Git for Windows, which also provides Git Bash")
-        Orchestrators().link_all()
-        Venv().ensure()
+        Venv().activate()
         print("CodeScribe ready in .venv (the loop uses it)")
+        Orchestrators().link_all()
         if shutil.which("npm") and not shutil.which("pi"):
             run(shutil.which("npm"), "install", "-g", "@earendil-works/pi-coding-agent")
         if shutil.which("pi"):
@@ -505,12 +506,21 @@ class Venv:
         if self.python.is_file() and self.stamp.is_file() and self.stamp.read_text() == want:
             return self
         print(f"setting up {self.path.name} ...", file=sys.stderr)
+        # check if uv is available
+        uv = shutil.which("uv")
         if not self.python.is_file():
-            call(*base_python(), "-m", "venv", self.path)
-        if not has_pip(self.python):
-            call(self.python, "-m", "ensurepip", "--upgrade")
-        call(self.python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check",
-             "-r", self.requirements)
+            if uv:
+                call(uv, "venv", "--quiet", "--seed", "--clear", "--python", ">=%d.%d" % MIN_PYTHON,
+                     self.path)
+            else:
+                call(*base_python(), "-m", "venv", self.path)
+        if uv:
+            call(uv, "pip", "install", "--quiet", "--python", self.python, "-r", self.requirements)
+        else:
+            if not has_pip(self.python):
+                call(self.python, "-m", "ensurepip", "--upgrade")
+            call(self.python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check",
+                 "-r", self.requirements)
         self.stamp.write_text(want)
         return self
 
@@ -530,18 +540,19 @@ class Venv:
 
 def base_python():
     """
-    A python >= 3.10 to make the venv from (the stubs themselves run on any python 3)
+    A python >= MIN_PYTHON to make the venv from (the stubs themselves run on any python 3)
     """
-    names = [sys.executable, *(f"python3.{minor}" for minor in range(14, 9, -1)), "python3", "python", "py"]
+    names = [sys.executable, *(f"python3.{minor}" for minor in range(14, MIN_PYTHON[1] - 1, -1)),
+             "python3", "python", "py"]
     for name in names:
         path = shutil.which(name) or (name if Path(name).is_file() else None)
         if not path:
             continue
         python = [path, "-3"] if name == "py" else [path]
-        recent = [*python, "-c", "import sys; sys.exit(sys.version_info < (3, 10))"]
+        recent = [*python, "-c", f"import sys; sys.exit(sys.version_info < {MIN_PYTHON})"]
         if subprocess.call(recent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
             return python
-    sys.exit("missing: python >= 3.10")
+    sys.exit("missing: python >= %d.%d" % MIN_PYTHON)
 
 
 def has_pip(python):
