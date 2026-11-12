@@ -235,9 +235,9 @@ class Lab(Level):
         --native) the submodules, and the image and check of every system
         """
         need("git", "Git; on Windows Git for Windows, which also provides Git Bash")
-        Orchestrators().link_all()
-        Venv().ensure()
+        Venv().activate()
         print("CodeScribe ready in .venv (the loop uses it)")
+        Orchestrators().link_all()
         if shutil.which("npm") and not shutil.which("pi"):
             run(shutil.which("npm"), "install", "-g", "@earendil-works/pi-coding-agent")
         if shutil.which("pi"):
