@@ -1,4 +1,4 @@
 # Native python of the agent systems, installed into .venv by tools/setup.
-CodeScribe @ git+https://github.com/akashdhruv/CodeScribe.git@1610deea199d3e83afd9aa1fb02176955236f080
+CodeScribe @ git+https://github.com/akashdhruv/CodeScribe.git@2026.11
 pyyaml
 toml

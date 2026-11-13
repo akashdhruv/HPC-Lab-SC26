@@ -4,9 +4,14 @@ A deliberately small implementation built on CodeScribe's Agent primitive
 (codescribe.lib.Agent). It mirrors the author-reviewer loop described in the
 workflows paper (Section "CodeScribe author--reviewer loop") but stays short
 enough to read in one sitting.
+
+The loop stops at the end of a group (every unit of the group verified in
+agent_log.md) or when the whole transformation is complete — never on a clean
+review alone, which would quit mid-group.
 """
 
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -312,10 +317,36 @@ class Loop:
                     pending.append(st.lstrip("-* ").strip())
         return blocker, pending[:8]
 
+    def _groups_done(self):
+        """(leading groups fully verified, total groups) from the plan's '- Group k: ...'
+        lines and the 'verified' lines of agent_log.md."""
+        def lines(name):
+            p = self.instance / name
+            return p.read_text().splitlines() if p.is_file() else []
+
+        groups = []
+        for ln in lines("current_plan.md"):
+            if ln.startswith("- Group"):
+                units = [u.lower() for u in re.findall(r"\b([A-Za-z_]\w*)\.F90\b", ln)]
+                if units:
+                    groups.append(units)
+        verified = set()
+        for ln in lines("agent_log.md"):
+            parts = [p.strip() for p in ln.lstrip("-").split("|")] if ln.startswith("-") else []
+            if len(parts) >= 3 and parts[0] and parts[2].lower() == "verified":
+                verified.add(parts[0].lower().removesuffix(".f90"))
+        done = 0
+        for units in groups:
+            if not all(u in verified for u in units):
+                break
+            done += 1
+        return done, len(groups)
+
     def run(self, loops=10):
         try:
             self.record.mkdir(parents=True, exist_ok=True)
             (self.record / "metadata").mkdir(parents=True, exist_ok=True)
+            start_done, total = self._groups_done()
 
             for loop_idx in range(1, loops + 1):
                 self._vprint(f"\n▶  loop {loop_idx} [author]")
@@ -383,11 +414,20 @@ class Loop:
                 self.author_next_steps = next_steps
 
                 check_ok = check_result is None or (isinstance(check_result, tuple) and check_result[0])
-                if status == "COMPLETE" and check_result is not None and check_ok:
+                # Stop only when a group completed during this run (or all did) and the
+                # check passed; a clean review alone must not end the loop mid-group.
+                stop = None
+                if check_ok:
+                    done, _ = self._groups_done()
+                    if total and done == total:
+                        stop = "complete"
+                    elif done > start_done:
+                        stop = f"group {done} complete"
+                if status == "COMPLETE" and stop:
                     self.items, self.blocker = [], ""
-                    self.stop_reason = "complete"
+                    self.stop_reason = stop
                     self.done = loop_idx
-                    self._vprint(f"■ author COMPLETE and check passed (loop {loop_idx})")
+                    self._vprint(f"■ author COMPLETE, {stop}, check passed (loop {loop_idx})")
                     break
 
                 self._vprint(f"\n▶  loop {loop_idx} [review]")
@@ -407,10 +447,10 @@ class Loop:
                 self.blocker = blocker
                 self.items = pending
 
-                if check_ok and not self.items and not self.blocker:
-                    self.stop_reason = "complete"
+                if stop:
+                    self.stop_reason = stop
                     self.done = loop_idx
-                    self._vprint(f"■ review clean and check passed (loop {loop_idx})")
+                    self._vprint(f"■ {stop} and check passed (loop {loop_idx})")
                     break
 
             if self.done == 0:
