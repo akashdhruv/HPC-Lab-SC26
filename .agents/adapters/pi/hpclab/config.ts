@@ -29,7 +29,7 @@ export class Config {
 		const a = this.agent;
 		return {
 			baseUrl: this.baseUrl,
-			apiKey: this.apiKey.replace(/^([!$])/, "$$$1"),
+			apiKey: this.apiKey,
 			api: "openai-completions" as const,
 			compat: {
 				supportsDeveloperRole: a.supports_developer_role ?? false,

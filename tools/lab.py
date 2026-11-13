@@ -365,14 +365,25 @@ class Config:
 
     def get(self, key, default=""):
         """
-        A dotted key ("agent.model"), with ${VARIABLES} expanded
+        A dotted key ("agent.model"), with ${VARIABLES} expanded. A value starting
+        with "!" is run as a shell command and its stdout is used (as pi does).
         """
         value = self.data
         for part in key.split("."):
             value = value.get(part) if isinstance(value, dict) else None
         if value in (None, ""):
             return default
-        return os.path.expandvars(str(value))
+        value = os.path.expandvars(str(value))
+        if value.startswith("!"):
+            import subprocess
+            try:
+                out = subprocess.run(value[1:], shell=True, capture_output=True, text=True, timeout=30)
+                if out.returncode == 0 and out.stdout.strip():
+                    return out.stdout.strip()
+            except Exception:
+                pass
+            return default
+        return value
 
     @property
     def model(self):

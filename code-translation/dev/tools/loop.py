@@ -1,37 +1,87 @@
-"""code-translation's autonomous loop: author -> check -> review, on CodeScribe's library primitives.
+"""code-translation's autonomous loop: a simple author -> check -> review loop.
 
-    This harness is a thin wrapper around codescribe.lib.prompt_loop (the canonical
-    author -> check -> review loop): Loop(instance, workdir, "oaic-<model>").run(loops)
-
-A Task is a loop.toml (the author's chat, a [tools] policy, a [check] command). A Loop is one run
-of it. The harness enforces protected files and the check command; the agents decide everything else.
+A deliberately small implementation built on CodeScribe's Agent primitive
+(codescribe.lib.Agent). It mirrors the author-reviewer loop described in the
+workflows paper (Section "CodeScribe author--reviewer loop") but stays short
+enough to read in one sitting.
 """
 
 import os
-import platform
-import signal
+import shlex
+import subprocess
 import sys
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from codescribe import lib
 
 
 def shims(bin, folder):
+    """Windows .cmd shims (no-op on POSIX)."""
     if os.name != "nt":
         return None
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     for stub in Path(bin).iterdir():
         if stub.is_file() and not stub.suffix:
-            (folder / f"{stub.name}.cmd").write_bytes(f'@python "{stub.resolve()}" %*\r\n'.encode())
+            (folder / f"{stub.name}.cmd").write_bytes(
+                f'@python "{stub.resolve()}" %*\r\n'.encode()
+            )
     return folder
 
 
-class Loop:
-    """
-    One run of a Task, delegated to codescribe.lib.prompt_loop.
-    """
+class ProtectedFileGuard:
+    def __init__(self, workdir: Path, patterns: List[str]):
+        self.workdir = workdir
+        self.patterns = list(patterns)
+        self.saved: Dict[Path, Optional[bytes]] = {}
+        self.violations: List[str] = []
 
+    def _resolve(self) -> List[Path]:
+        paths: List[Path] = []
+        for pat in self.patterns:
+            if any(c in pat for c in "*?["):
+                cands = list(self.workdir.glob(pat))
+            else:
+                cands = [self.workdir / pat]
+            for p in cands:
+                try:
+                    p = p.resolve()
+                    p.relative_to(self.workdir.resolve())
+                except (ValueError, OSError):
+                    continue
+                if p.is_dir():
+                    continue
+                if p not in paths:
+                    paths.append(p)
+        return paths
+
+    def snapshot(self) -> None:
+        self.saved = {p: (p.read_bytes() if p.is_file() else None) for p in self._resolve()}
+        self.violations = []
+
+    def restore(self) -> List[str]:
+        reverted: List[str] = []
+        for path, before in self.saved.items():
+            after = path.read_bytes() if path.is_file() else None
+            if after == before:
+                continue
+            rel = str(path.relative_to(self.workdir))
+            try:
+                if before is None:
+                    if path.exists():
+                        path.unlink()
+                else:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(before)
+                reverted.append(f"{rel} (restored)")
+            except OSError as exc:
+                reverted.append(f"{rel} (restore FAILED: {exc})")
+        self.violations.extend(reverted)
+        return reverted
+
+
+class Loop:
     def __init__(self, instance, workdir, model, task="loop.toml", reasoning=False,
                  iterations=30, verbose=True):
         self.instance = Path(instance).resolve()
@@ -46,23 +96,327 @@ class Loop:
         self.done = 0
         self.stop_reason = "max_loops"
 
+        self.chat_history, self.meta = lib.load_chat_template(self.task_path, return_meta=True)
+        tools_cfg = self.meta.get("tools") or {}
+        self.bash_allow = set(tools_cfg.get("bash") or [])
+        self.memory = tools_cfg.get("memory")
+        self.check_cfg = self.meta.get("check")
+        self.writable = list(tools_cfg.get("writable") or [])
+        self.protect_patterns = [self.task_path.relative_to(self.workdir).as_posix()] + \
+            list(tools_cfg.get("protect") or [])
+
+        self.model = lib.set_neural_model(self.model_name, reasoning=self.reasoning)
+        self.guard = ProtectedFileGuard(self.workdir, self.protect_patterns)
+
+        self.loop_summaries: List[Dict[str, Any]] = []
+        self.items: List[str] = []
+        self.blocker: str = ""
+        self.author_next_steps: List[str] = []
+
+    def _protected_paths(self) -> set:
+        paths = {self.task_path.resolve()}
+        for pat in self.protect_patterns:
+            if any(c in pat for c in "*?["):
+                for p in self.workdir.glob(pat):
+                    try:
+                        paths.add(p.resolve())
+                    except OSError:
+                        pass
+            else:
+                paths.add((self.workdir / pat).resolve())
+        return paths
+
+    def make_author_tools(self):
+        return lib.make_tools(
+            self.workdir,
+            bash_allow=self.bash_allow,
+            protected_paths=self._protected_paths(),
+            memory=self.memory,
+        )
+
+    def make_review_tools(self):
+        tools = lib.make_readonly_tools(
+            self.workdir,
+            bash_allow={"ls", "stat", "pwd", "find", "grep", "head", "tail",
+                        "which", "env", "rg", "git"},
+            protected_paths=self._protected_paths(),
+            memory=self.memory,
+        )
+        tools.append(lib.WriteTool(root=self.workdir, protected_paths=self._protected_paths()))
+        return tools
+
+    def run_check(self):
+        if not self.check_cfg:
+            return None
+        cmd = self.check_cfg["command"]
+        timeout = self.check_cfg.get("timeout", 300)
+        try:
+            proc = subprocess.run(shlex.split(cmd), cwd=self.workdir,
+                                  capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return False, f"timed out after {timeout}s"
+        except (OSError, ValueError) as exc:
+            return False, str(exc)
+        out = (proc.stdout + proc.stderr).strip()
+        return proc.returncode == 0, out[-4000:]
+
+    def _vprint(self, msg):
+        if self.verbose:
+            print(msg, flush=True)
+
+    def _system_prompt(self):
+        return (
+            "You are an autonomous coding agent specializing in test-driven development and repair.\n\n"
+            "Core rules:\n"
+            "- NEVER fabricate command results, test output, or file contents - always call a tool.\n"
+            "- Determine project state by reading files and running commands; never assume.\n"
+            "- Only access files within the working directory.\n"
+            "- In bash, only use relative paths or paths under the working directory.\n"
+        )
+
+    def _review_system_prompt(self):
+        return (
+            "You are a code reviewer verifying another agent's work against a task specification.\n\n"
+            "Core rules:\n"
+            "- Judge from the harness evidence (diff, check output) and the files.\n"
+            "- NEVER fabricate file contents or results.\n"
+            "- Report only concrete defects or missing work.\n"
+            "- Be decisive: when the spec is met, say so and raise nothing.\n"
+        )
+
+    def _author_task(self, loop_idx, loops, last_check):
+        lines = [f"Loop {loop_idx} of {loops}."]
+        if self.loop_summaries:
+            last = self.loop_summaries[-1]
+            if last.get("check") is not None:
+                passed, tail = last["check"]
+                lines.append(f"Harness check: {'PASSED' if passed else 'FAILED'}")
+                if tail and not passed:
+                    lines.append(f"```text\n{tail}\n```")
+            if last.get("errors"):
+                lines.append("Last loop errors: " + "; ".join(last["errors"][:5]))
+            if last.get("violations"):
+                lines.append("VIOLATION last loop (reverted): " + "; ".join(last["violations"]))
+        if self.blocker:
+            lines.append(f"Reviewer blocker: {self.blocker}")
+        if self.items:
+            lines.append("Open review items (resolve every one):")
+            for it in self.items:
+                lines.append(f"  - {it}")
+        elif loop_idx > 1:
+            lines.append("No open review items - determine the next action from the task.")
+        context = "\n".join(lines)
+
+        check_line = ""
+        if last_check is not None:
+            passed, tail = last_check
+            check_line = f"\nHarness check (previous): {'PASSED' if passed else 'FAILED'}\n"
+            if tail:
+                check_line += f"```text\n{tail}\n```\n"
+
+        return (
+            f"{context}\n\n"
+            f"Working directory: {self.workdir}\n"
+            f"Task file: {self.task_path.relative_to(self.workdir)} (read-only)\n\n"
+            "PHASE: AUTHOR\n\n"
+            "Goal: complete the task. Implement remaining items, verify, stop when done.\n"
+            "The harness runs its own check after you finish; your report cannot override it.\n\n"
+            "Protocol: read plan first, then spec. Write a short PLAN, execute autonomously,\n"
+            "run checks after each change. Stop on hard blockers.\n\n"
+            "Finish with <final_answer> including:\n"
+            "- STATUS: COMPLETE if all done and checks pass, else STATUS: INCOMPLETE\n"
+            "- The PLAN followed\n"
+            "- Exact check output\n"
+            "- If INCOMPLETE: NEXT STEPS: (bulleted, 3-5 items)\n"
+            + check_line
+        )
+
+    def _review_task(self, loop_idx, author_answer, check_result):
+        evidence = []
+        if check_result is not None:
+            passed, tail = check_result
+            evidence.append(f"Harness check: {'PASSED' if passed else 'FAILED'}\n```text\n{tail}\n```")
+        if author_answer:
+            evidence.append(f"[Author report]\n\n{author_answer}")
+        if self.items:
+            evidence.append("Open review items from earlier loops:\n" + "\n".join(f"  - {i}" for i in self.items))
+        evidence_txt = "\n\n".join(evidence)
+
+        return (
+            f"Working directory: {self.workdir}\n"
+            f"Task file: {self.task_path.relative_to(self.workdir)} (read-only)\n\n"
+            "PHASE: REVIEW\n\n"
+            f"{evidence_txt}\n\n"
+            "Your job: judge the work against the spec using the check output. "
+            "Report concrete defects or missing work. If check passes and spec is met, "
+            "say so and raise nothing.\n\n"
+            "Finish with <final_answer> listing:\n"
+            "- A one-paragraph summary of what happened\n"
+            "- blocker: main blocker, or empty\n"
+            "- pending: list of concrete open items (empty if none)\n"
+        )
+
+    def _parse_author(self, text):
+        status = None
+        for line in (text or "").splitlines():
+            s = line.strip().upper()
+            if s.startswith("STATUS:"):
+                v = s[len("STATUS:"):].strip()
+                if v.startswith("COMPLETE"):
+                    status = "COMPLETE"
+                elif v.startswith("INCOMPLETE"):
+                    status = "INCOMPLETE"
+        steps = []
+        in_sec = False
+        for line in (text or "").splitlines():
+            st = line.strip()
+            if st.upper().startswith("NEXT STEPS"):
+                in_sec = True
+                continue
+            if in_sec:
+                if not st:
+                    continue
+                if st.startswith("#"):
+                    break
+                if st.startswith("-") or st.startswith("*"):
+                    steps.append(st.lstrip("-* ").strip())
+                else:
+                    d = 0
+                    while d < len(st) and st[d].isdigit():
+                        d += 1
+                    if d > 0 and d < len(st) and st[d:d + 2] in (". ", ") "):
+                        steps.append(st[d + 2:].strip())
+        return status, steps[:5]
+
+    def _parse_review(self, text):
+        blocker = ""
+        pending = []
+        in_pending = False
+        for line in (text or "").splitlines():
+            st = line.strip()
+            lowl = st.lower()
+            if lowl.startswith("blocker:"):
+                blocker = st[len("blocker:"):].strip().strip('"').strip()
+                in_pending = False
+                continue
+            if lowl.startswith("pending"):
+                in_pending = True
+                continue
+            if in_pending:
+                if not st:
+                    continue
+                if st.startswith("#") or lowl.startswith("blocker") or lowl.startswith("next"):
+                    in_pending = False
+                    continue
+                if st.startswith("-") or st.startswith("*"):
+                    pending.append(st.lstrip("-* ").strip())
+        return blocker, pending[:8]
+
     def run(self, loops=10):
         try:
-            result = lib.prompt_loop(
-                task_file=self.task_path,
-                model=self.model_name,
-                agent_loops=loops,
-                agent_iterations=self.iterations,
-                verbose=self.verbose,
-                workdir=self.workdir,
-                reason=self.reasoning,
-            )
+            self.record.mkdir(parents=True, exist_ok=True)
+            (self.record / "metadata").mkdir(parents=True, exist_ok=True)
+
+            for loop_idx in range(1, loops + 1):
+                self._vprint(f"\n▶  loop {loop_idx} [author]")
+
+                self.guard.snapshot()
+
+                last_check = self.loop_summaries[-1]["check"] if self.loop_summaries else None
+                author_task = self._author_task(loop_idx, loops, last_check)
+                author_agent = lib.Agent(
+                    self.model,
+                    tools=self.make_author_tools(),
+                    max_iterations=self.iterations,
+                    show_diagnostics=self.verbose,
+                )
+                author_result = author_agent.run(
+                    author_task, system=self._system_prompt(), chat_history=self.chat_history
+                )
+                author_answer = author_result.final_text or ""
+
+                reverted = self.guard.restore()
+                if reverted and self.verbose:
+                    print("  ⚠ protected files reverted: " + "; ".join(reverted))
+
+                check_result = self.run_check()
+                if self.verbose and check_result is not None:
+                    passed, _ = check_result
+                    print(f"  check: {'PASS' if passed else 'FAIL'}")
+
+                errors = []
+                files_written = []
+                files_edited = []
+                files_read = []
+                commands = []
+                for tr in author_result.tool_results:
+                    args = tr.args if isinstance(tr.args, dict) else {}
+                    ap = ""
+                    if tr.name in ("read", "write", "edit"):
+                        ap = str(args.get("path", ""))
+                    elif tr.name == "bash":
+                        ap = (args.get("command") or "")[:80]
+                    if not tr.ok:
+                        errors.append(f"{tr.name}({ap}): {(tr.output_preview or '')[:80]}")
+                    elif tr.name == "write":
+                        files_written.append(ap)
+                    elif tr.name == "edit":
+                        files_edited.append(ap)
+                    elif tr.name == "read":
+                        files_read.append(ap)
+                    elif tr.name == "bash":
+                        first = (tr.output_preview or "").splitlines()[0][:60] if tr.output_preview else ""
+                        commands.append(f"{ap}  →  {first}")
+
+                status, next_steps = self._parse_author(author_answer)
+                self.loop_summaries.append({
+                    "loop_index": loop_idx,
+                    "files_written": files_written,
+                    "files_edited": files_edited,
+                    "files_read": files_read,
+                    "commands": commands,
+                    "errors": errors,
+                    "violations": reverted,
+                    "check": check_result,
+                    "author_answer": author_answer,
+                })
+                self.author_next_steps = next_steps
+
+                check_ok = check_result is None or (isinstance(check_result, tuple) and check_result[0])
+                if status == "COMPLETE" and check_result is not None and check_ok:
+                    self.items, self.blocker = [], ""
+                    self.stop_reason = "complete"
+                    self.done = loop_idx
+                    self._vprint(f"■ author COMPLETE and check passed (loop {loop_idx})")
+                    break
+
+                self._vprint(f"\n▶  loop {loop_idx} [review]")
+                review_task = self._review_task(loop_idx, author_answer, check_result)
+                review_agent = lib.Agent(
+                    self.model,
+                    tools=self.make_review_tools(),
+                    max_iterations=max(6, self.iterations // 2),
+                    show_diagnostics=self.verbose,
+                )
+                review_result = review_agent.run(
+                    review_task, system=self._review_system_prompt(), chat_history=self.chat_history
+                )
+                review_answer = review_result.final_text or ""
+
+                blocker, pending = self._parse_review(review_answer)
+                self.blocker = blocker
+                self.items = pending
+
+                if check_ok and not self.items and not self.blocker:
+                    self.stop_reason = "complete"
+                    self.done = loop_idx
+                    self._vprint(f"■ review clean and check passed (loop {loop_idx})")
+                    break
+
+            if self.done == 0:
+                self.done = min(loops, len(self.loop_summaries))
+
+            self._vprint(f"\n■ {self.stop_reason}: {self.done}/{loops} loop(s)")
         except KeyboardInterrupt:
             self.stop_reason = "stopped"
-            return self
-        self.done = loops
-        if isinstance(result, str) and ":" in result:
-            self.stop_reason = result.split(":", 1)[0].strip()
-        elif isinstance(result, str) and result:
-            self.stop_reason = result.strip()
         return self

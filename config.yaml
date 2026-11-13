@@ -7,13 +7,13 @@
 # orchestrator: how Claude Code and pi sessions are set up (.agents/adapters).
 # A value may read an environment variable: "${NAME}".
 
-OPENAI_COMP_BASEURL: "<string-url>"
-OPENAI_COMP_APIKEY: "<string-apikey>"
-OPENAI_COMP_PROVIDER: "<string-name>"
+OPENAI_COMP_BASEURL: "https://inference-api.alcf.anl.gov/resource_server/minerva/api/v1"
+OPENAI_COMP_APIKEY: "!alcf-tokens get-token inference"
+OPENAI_COMP_PROVIDER: "alcf"
 
 agent:
-  model: "gpt56sol"
-  loop_model: "gpt56terra"
+  model: "mistral-large-4-nvfp4"
+  loop_model: "beam-1.0-bf16"
   reasoning: false
   context_window: 272000
   max_tokens: 16384
@@ -21,17 +21,17 @@ agent:
   supports_reasoning_effort: false
 
 evolve:
-  models: ["gpt56terra", "gpt56sol"]
+  models: ["beam-1.0-bf16", "beam-1.0-bf16"]
   max_tokens: 16000
   timeout: 300
 
 claude:
   enabled: true
-  base_url: "<string-url>"  # ANTHROPIC_BASE_URL
-  model: "opus-5.5"
-  opus_model: "opus-5.5"      # default: model
-  sonnet_model: "opus-5.5"    # default: model
-  haiku_model: "opus-5.5"     # default: model
+  base_url: "https://inference-api.alcf.anl.gov/resource_server/minerva/api"  # ANTHROPIC_BASE_URL
+  model: "mistral-large-4-nvfp4"
+  opus_model: "mistral-large-4-nvfp4"   # default: model
+  sonnet_model: "beam-1.0-bf16"         # default: model
+  haiku_model: "beam-1.0-bf16"          # default: model
   max_output_tokens: 32000
   # One of: a command printing the key/token (apiKeyHelper), or a key ("${NAME}" reads the env).
   api_key_helper: "alcf-tokens get-token inference"

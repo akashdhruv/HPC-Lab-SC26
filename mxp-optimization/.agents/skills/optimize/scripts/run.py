@@ -57,8 +57,20 @@ class Endpoint:
             sys.exit(f"{path} missing")
 
         config = yaml.safe_load(path.read_text()) or {}
-        self.base_url = os.path.expandvars(str(config.get("OPENAI_COMP_BASEURL", "")))
-        self.api_key = os.path.expandvars(str(config.get("OPENAI_COMP_APIKEY", "")))
+        def resolve(value):
+            value = os.path.expandvars(str(value or ""))
+            if value.startswith("!"):
+                import subprocess
+                try:
+                    out = subprocess.run(value[1:], shell=True, capture_output=True, text=True, timeout=30)
+                    if out.returncode == 0 and out.stdout.strip():
+                        return out.stdout.strip()
+                except Exception:
+                    pass
+                return ""
+            return value
+        self.base_url = resolve(config.get("OPENAI_COMP_BASEURL", ""))
+        self.api_key = resolve(config.get("OPENAI_COMP_APIKEY", ""))
         self.evolve = config.get("evolve") or {}
 
         if not self.base_url or not self.api_key:
