@@ -14,9 +14,13 @@ Planned with: pi using hpc-lab/agent, 2026-11-07
    `readiness` shows as ready (earlier units of the group make later ones ready).
 3. Settle that one unit:
    a. read it, its callers (`grep -n <name> app/src/*`) and the Spec's rules and traps;
-   b. write the C++ (and shim), `rm app/src/<unit>`;
-   c. `oracle`. PASS: log `verified`. FAIL: fix and rerun; if you cannot, restore the unit
-      (`git checkout -- app/src/<unit>`, `rm` the new files) and log `failed`.
+   b. write the C++ (and shim if a module is still used by Fortran);
+   c. `rm app/src/<unit>.F90` (mandatory: a leftover original next to its shim defines the same
+      module twice and breaks the build);
+   d. if any C/C++ entry point is still called from Fortran, declare it `extern "C"` under the
+      mangled name `<name>_` with pointer args and a trailing `size_t` length per character arg;
+   e. `oracle`. PASS: log `verified`. FAIL: fix and rerun; if you cannot, restore the unit
+      (`git checkout -- app/src/<unit>.F90`, `rm` the new files) and log `failed`.
 4. After settling a unit, report `STATUS: INCOMPLETE` with the next unit while any unit in the
    current scope (Groups 1–3 before approval; Group 4 after) remains unverified, including at
    the boundaries after Groups 1 and 2. A review fix for one unit does not make the group

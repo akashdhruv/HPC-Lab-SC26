@@ -25,6 +25,14 @@ Translate all 13 Fortran units in `app/src` to C++ while preserving the applicat
 A unit is one `app/src/<name>.F90` (not a `*_fi.F90` shim). It is ready when `readiness` shows
 `yes`: everything it uses or calls is already C++.
 
+A unit counts as settled only when ALL of the following hold:
+- the original `app/src/<name>.F90` has been deleted (a leftover `.F90` alongside a `_fi.F90`
+  shim makes the build define the same module twice);
+- any C/C++ entry point still called from Fortran is declared `extern "C"` under gfortran's
+  mangled name (lower case plus trailing `_`), with every argument by pointer and a trailing
+  `size_t` length for each `character` argument;
+- `oracle` passes.
+
 ## Translation rules
 
 1. Replace `<name>.F90` with `<name>.cpp` (+ `.hpp` if C++ calls it); delete the `.F90`.
@@ -52,3 +60,5 @@ A unit is one `app/src/<name>.F90` (not a `*_fi.F90` shim). It is ready when `re
 - `select case (trim(bc_y))`: compare the trimmed string, length from the hidden argument.
 - Namelist input: `key = value` pairs, `d0` exponents, quoted strings, commas, ends at `/`.
 - `nx /= ny`: swapped indices fail the oracle.
+- An `extern "C"` function called from Fortran must use the mangled name (`name_`), not the bare
+  name, or the link fails even though the C++ compiles.
