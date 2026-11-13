@@ -8,7 +8,8 @@ Planned with: pi using hpc-lab/agent, 2026-11-07
    The current group is the first with a unit not `verified`. Groups 1–3 are one continuous
    translation batch: do not wait for approval between them. Group 4 may begin only after the
    scientist has approved `Groups 1-3`; without that approval, change nothing and report
-   `STATUS: COMPLETE` with "Groups 1-3 await approval".
+   `STATUS: INCOMPLETE` with "Groups 1-3 await approval" in NEXT STEPS (this is a blocker, not
+   completion).
 2. Fix what the review reports first. Otherwise take the next unit of the current group that
    `readiness` shows as ready (earlier units of the group make later ones ready).
 3. Settle that one unit:
@@ -16,11 +17,12 @@ Planned with: pi using hpc-lab/agent, 2026-11-07
    b. write the C++ (and shim), `rm app/src/<unit>`;
    c. `oracle`. PASS: log `verified`. FAIL: fix and rerun; if you cannot, restore the unit
       (`git checkout -- app/src/<unit>`, `rm` the new files) and log `failed`.
-4. After settling a unit, report `STATUS: INCOMPLETE` with the next unit while any unit in
-   Groups 1–3 remains unverified, including at the boundaries after Groups 1 and 2. Report
-   `STATUS: COMPLETE` only when all units in Groups 1–3 are verified ("Groups 1-3 ready for
-   approval"). Once `Groups 1-3` is approved, apply the same rule to Group 4 and report complete
-   only when all of Group 4 is verified. One unit per session.
+4. After settling a unit, report `STATUS: INCOMPLETE` with the next unit while any unit in the
+   current scope (Groups 1–3 before approval; Group 4 after) remains unverified, including at
+   the boundaries after Groups 1 and 2. A review fix for one unit does not make the group
+   complete. Report `STATUS: COMPLETE` only when every unit in the current scope is `verified`
+   ("Groups 1-3 ready for approval" / "Group 4 ready"). Never report COMPLETE for a single
+   settled unit. One unit per session.
 
 ## Log
 

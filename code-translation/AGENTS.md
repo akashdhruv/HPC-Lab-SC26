@@ -26,6 +26,6 @@ written; the scientist reviews and approves it.
   last runs).
 - Skills: `loop` (asks which transformation, then starts it), `loop-status` (report, and verify
   a stopped loop).
-- The loop writes `app/src` and `agent_log.md`; the harness reverts any change to the spec,
-  plan, approvals, `loop.toml`, `app/tests/`, `app/Makefile` and `app/include/`. Each run is
+- The loop writes `app/src`, `app/include/` and `agent_log.md`; the harness reverts any change
+  to the spec, plan, approvals, `loop.toml`, `app/tests/` and `app/Makefile`. Each run is
   recorded in `transformations/app-translate/runs/<run_id>/`. `git checkout app/` starts over.
