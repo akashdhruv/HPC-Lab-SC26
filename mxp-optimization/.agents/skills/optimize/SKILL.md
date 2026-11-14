@@ -26,7 +26,7 @@ accepted in the same E. Commands run from `mxp-optimization/`; everything runs i
 | score | -(mean over steps of `err_shape`): M, the mean distance between the fp8 and fp64 interfaces in cells; raptorize's eval run (64², t = 0.5) |
 | guards | equivalence: the candidate's fp64 run reproduces the seed's (1e-10) |
 | rules | types stay double, no library calls but min/max/abs, no preprocessor |
-| job | models from config.yaml `evolve`, max_programs 10, timeout 300 s |
+| job | model from config.yaml `evolve`, max_programs 10, timeout 300 s |
 
 3. Calibrate: `../tools/container make evaluate EXP=<R>` twice, identical scores; put the seed score
    in the problem. The fp8 seed is NaN (`NAN_OR_INF`, score null): then two identical labels, and

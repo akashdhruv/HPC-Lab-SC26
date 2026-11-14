@@ -111,15 +111,15 @@ cd mxp-optimization && claude    # or: pi, codex, opencode
     > !approve <run> result
     > optimize, plan mode                   (then approve, evolve <run>, accept a candidate)
 
-`!<line>` runs a shell line in any orchestrator; in pi, skills are also `/skill:<name>`. With
-`orchestrator.dev_bin_on_path: true` in `config.yaml`, every tool is on the PATH by name, without
-a `dev/bin/` or `../tools/` prefix. Each system's `AGENTS.md` has the details, and
+`!<line>` runs a shell line in any orchestrator; in pi, skills are also `/skill:<name>`. The
+adapters put every tool on the PATH by name, without a `dev/bin/` or `../tools/` prefix.
+Each system's `AGENTS.md` has the details, and
 `mxp-optimization/dev/README.md` walks through its stages.
 
 ## Layout
 
 ```
-config.yaml                  model endpoint of the harnesses (and of pi); orchestrator.dev_bin_on_path
+config.yaml                  model endpoint of pi, the loop, evolve and Claude Code (pi:, loop:, evolve:, claude:)
 tools/                       setup and what every system inherits (tools/README.md: the contract)
                              approve, container; lab.py (class Lab, levels, dispatch)
 .agents/adapters/            Claude Code and pi settings and extension, linked by setup

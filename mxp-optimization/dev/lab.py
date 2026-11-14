@@ -16,9 +16,7 @@ class Mxp(parent(__file__)):
     image = "hpc-lab-mxp"
 
     def check(self):
-        """
-        The app's tests in the container (make check)
-        """
+        """The app's tests in the container (make check)"""
         return self.docker.run(["make", "check"])
 
     def new(self, stage, experiment, source="app/src/advect.cpp"):

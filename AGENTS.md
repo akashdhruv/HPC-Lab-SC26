@@ -14,7 +14,7 @@ Every stage runs the same way, led by the scientist:
   skill, read that SKILL.md when the scientist asks for the stage.
 - Tools (`tools/README.md`): a system's own in its `dev/bin/` (`dev/bin/oracle`), the shared ones
   in the root's `tools/`, inherited by every system (`../tools/container` runs as the system you
-  are in). Call them by path (by name too if `orchestrator.dev_bin_on_path` is on); `--help` on any.
+  are in). Call them by path — the adapters also put them on PATH, so by name works too; `--help` on any.
 - `dev/` holds a system's tools only; its instances are siblings of `dev/`: `transformations/<T>/`
   (approved, rerunnable procedures) and `experiments/<E>/<n>-<stage>/` (records of open-ended
   work), each with its own `approvals.toml`.

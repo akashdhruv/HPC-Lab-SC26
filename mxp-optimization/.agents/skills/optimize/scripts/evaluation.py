@@ -64,21 +64,9 @@ class Evaluator:
         fp64_scan=None,
         timeout=600,
     ):
-        """
-        Constructor
-
-        Parameters
-        ----------
-        root      : mxp-optimization/, where make builds the app
-        source    : the kernel's file, relative to app/
-        command   : the run, in app/
-        outdir    : its output directory, removed before each run
-        metrics   : metric names, primary first
-        build     : build command, in root
-        rules     : (regex, label) pairs the block must not match
-        fp64_scan : (object file, name tag): scan those functions for FP64 instructions
-        timeout   : seconds for the run
-        """
+        # root: mxp-optimization/; source: the kernel's file in app/; command: the run, in app/;
+        # outdir: removed before each run; metrics: primary first; rules: (regex, label) the block
+        # must not match; fp64_scan: (object file, name tag) whose functions get scanned
         self.root = Path(root)
         self.app = self.root / "app"
         self.source = source
@@ -180,9 +168,8 @@ class Evaluator:
             header = re.match(r"^[0-9a-fA-F]+\s+<(.+)>:\s*$", line)
             if header:
                 function = header.group(1)
-            elif tag in function and FP64_ASM.search(line):
-                instruction = FP64_ASM.search(line).group(1)
-                return "FP64_INSTRUCTION", f"'{instruction}' in '{function}'."
+            elif tag in function and (found := FP64_ASM.search(line)):
+                return "FP64_INSTRUCTION", f"'{found.group(1)}' in '{function}'."
 
         return None
 

@@ -48,9 +48,7 @@ def interrupt(*_):
 
 
 class Endpoint:
-    """
-    Model endpoint from the tutorial's config.yaml
-    """
+    """Model endpoint from the tutorial's config.yaml"""
 
     def __init__(self, path=TUTORIAL / "config.yaml"):
         if not path.is_file():
@@ -60,7 +58,6 @@ class Endpoint:
         def resolve(value):
             value = os.path.expandvars(str(value or ""))
             if value.startswith("!"):
-                import subprocess
                 try:
                     out = subprocess.run(value[1:], shell=True, capture_output=True, text=True, timeout=30)
                     if out.returncode == 0 and out.stdout.strip():
@@ -85,8 +82,8 @@ class Run:
     def __init__(self, path):
         self.path = Path(path).resolve()
         self.results = self.path / "results"
-        spec = yaml.safe_load((self.path / "experiment.yaml").read_text()) or {}
-        self.source_rel = spec.get("source", "app/src/advect.cpp")
+        self.experiment = yaml.safe_load((self.path / "experiment.yaml").read_text()) or {}
+        self.source_rel = self.experiment.get("source", "app/src/advect.cpp")
         self.source = MXP / self.source_rel
         self.seed_file = self.path / "seed.cpp"
 
@@ -102,7 +99,7 @@ class Run:
         """
         experiment.yaml; MAX_PROGRAMS in the environment overrides max_programs
         """
-        spec = yaml.safe_load((self.path / "experiment.yaml").read_text())
+        spec = dict(self.experiment)
         spec["max_programs"] = int(os.environ.get("MAX_PROGRAMS", spec["max_programs"]))
         return spec
 
@@ -181,12 +178,12 @@ class Run:
         OpenEvolve's config from experiment.yaml and config.yaml's evolve section
         """
         options = {**endpoint.evolve, **(spec.get("openevolve") or {})}
-        models = options.get("models") or sys.exit("set evolve.models in config.yaml")
+        model = options.get("model")
+        if not model:
+            sys.exit("set evolve.model in config.yaml")
 
         llm = {
-            "models": [
-                {"name": model, "weight": 1.0 / len(models)} for model in models
-            ],
+            "models": [{"name": model, "weight": 1.0}],
             "api_base": endpoint.base_url,
             "api_key": "${OPENAI_API_KEY}",
             "max_tokens": options.get("max_tokens", 16000),

@@ -1,4 +1,4 @@
-# <R>: the search. Rules here == rules in evaluator.py. Endpoint and models: config.yaml.
+# <R>: the search. Rules here == rules in evaluator.py. Endpoint and model: config.yaml.
 
 title: "WENO5 advection kernel in fp8 (RAPTOR) that matches the original in fp64"
 source: app/src/advect.cpp
@@ -7,7 +7,7 @@ max_programs: 10
 timeout: 300
 
 # Per-run override of config.yaml evolve:
-# openevolve: {models: ["<model>"], max_tokens: 16000, reasoning_effort: low}
+# openevolve: {model: "<model>", max_tokens: 16000, reasoning_effort: low}
 
 problem: |
   The EVOLVE-BLOCK in app/src/advect.cpp holds wenoFaceValue and advectWeno: the WENO5

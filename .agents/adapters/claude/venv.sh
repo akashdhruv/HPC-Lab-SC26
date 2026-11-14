@@ -1,7 +1,6 @@
 #!/bin/sh
 # SessionStart hook: puts the tutorial's .venv first on PATH for Claude Code's commands.
-# With orchestrator.dev_bin_on_path in config.yaml, the stub folders go before it:
-# the session's system dev/bin, then tools/ (tools/lab.py prints them).
+# The stub folders go before it: the session's system dev/bin, then tools/ (tools/lab.py bins).
 
 session=$PWD
 cd "$(git rev-parse --show-toplevel)" || exit 0

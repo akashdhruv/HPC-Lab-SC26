@@ -1,43 +1,39 @@
 # Model endpoint of the agent systems: any OpenAI-compatible API.
 #
-# agent:  the model of pi (both systems) and of the CodeScribe loop (loop_model overrides it).
-# evolve: the models OpenEvolve samples candidates from (mxp-optimization).
+# pi:     the model of pi sessions (both systems).
+# loop:   the model of the CodeScribe loop (code-translation), like evolve its own section; a
+#         key not set here falls back to pi: (loop.model defaults to pi.model, likewise
+#         reasoning and max_tokens).
+# evolve: the model OpenEvolve samples candidates from (mxp-optimization).
 # claude: Claude Code on an Anthropic-compatible endpoint (tools/setup writes it to each
 #   .claude/settings.local.json; rerun setup after editing). Off: Claude Code uses its own login.
-# orchestrator: how Claude Code and pi sessions are set up (.agents/adapters).
 # A value may read an environment variable: "${NAME}".
 
 OPENAI_COMP_BASEURL: "https://inference-api.alcf.anl.gov/resource_server/minerva/api/v1"
 OPENAI_COMP_APIKEY: "!alcf-tokens get-token inference"
 OPENAI_COMP_PROVIDER: "alcf"
 
-agent:
+pi:
   model: "mistral-large-4-nvfp4"
-  loop_model: "beam-1.0-bf16"
   reasoning: false
   context_window: 272000
   max_tokens: 16384
   supports_developer_role: false
   supports_reasoning_effort: false
 
+loop:
+  model: "beam-1.0-bf16"
+
 evolve:
-  models: ["beam-1.0-bf16", "beam-1.0-bf16"]
+  model: "beam-1.0-bf16"
   max_tokens: 16000
   timeout: 300
 
 claude:
   enabled: true
   base_url: "https://inference-api.alcf.anl.gov/resource_server/minerva/api"  # ANTHROPIC_BASE_URL
-  model: "mistral-large-4-nvfp4"
-  opus_model: "mistral-large-4-nvfp4"   # default: model
-  sonnet_model: "beam-1.0-bf16"         # default: model
-  haiku_model: "beam-1.0-bf16"          # default: model
+  model: "mistral-large-4-nvfp4"   # sets opus, sonnet and haiku alike
   max_output_tokens: 32000
   # One of: a command printing the key/token (apiKeyHelper), or a key ("${NAME}" reads the env).
   api_key_helper: "alcf-tokens get-token inference"
   api_key: ""
-
-orchestrator:
-  # true: the system's dev/bin, then tools/, first on PATH (tools/README.md), so tools run by
-  # name (oracle, container; approve is still the scientist's) and inherit as by path. Off, call them by path (dev/bin/oracle, ../tools/container).
-  dev_bin_on_path: true

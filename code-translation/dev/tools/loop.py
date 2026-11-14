@@ -1,12 +1,6 @@
-"""code-translation's autonomous loop: a simple author -> check -> review loop.
+"""code-translation's autonomous loop: author -> check -> review, on CodeScribe's Agent.
 
-A deliberately small implementation built on CodeScribe's Agent primitive
-(codescribe.lib.Agent). It mirrors the author-reviewer loop described in the
-workflows paper (Section "CodeScribe author--reviewer loop") but stays short
-enough to read in one sitting.
-
-The loop stops at the end of a group (every unit of the group verified in
-agent_log.md) or when the whole transformation is complete — never on a clean
+Stops at the end of a group or when the transformation is complete — never on a clean
 review alone, which would quit mid-group.
 """
 
@@ -14,9 +8,8 @@ import os
 import re
 import shlex
 import subprocess
-import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from codescribe import lib
 
@@ -35,38 +28,38 @@ def shims(bin, folder):
     return folder
 
 
+def expand(workdir, patterns):
+    """The patterns' paths under workdir: globs expanded, resolved, confined to workdir"""
+    paths = []
+    for pat in patterns:
+        cands = list(workdir.glob(pat)) if any(c in pat for c in "*?[") else [workdir / pat]
+        for p in cands:
+            try:
+                p = p.resolve()
+                p.relative_to(workdir.resolve())
+            except (ValueError, OSError):
+                continue
+            if p not in paths:
+                paths.append(p)
+    return paths
+
+
 class ProtectedFileGuard:
-    def __init__(self, workdir: Path, patterns: List[str]):
+    def __init__(self, workdir: Path, patterns: list[str]):
         self.workdir = workdir
         self.patterns = list(patterns)
-        self.saved: Dict[Path, Optional[bytes]] = {}
-        self.violations: List[str] = []
+        self.saved: dict[Path, bytes | None] = {}
+        self.violations: list[str] = []
 
-    def _resolve(self) -> List[Path]:
-        paths: List[Path] = []
-        for pat in self.patterns:
-            if any(c in pat for c in "*?["):
-                cands = list(self.workdir.glob(pat))
-            else:
-                cands = [self.workdir / pat]
-            for p in cands:
-                try:
-                    p = p.resolve()
-                    p.relative_to(self.workdir.resolve())
-                except (ValueError, OSError):
-                    continue
-                if p.is_dir():
-                    continue
-                if p not in paths:
-                    paths.append(p)
-        return paths
+    def _resolve(self) -> list[Path]:
+        return [p for p in expand(self.workdir, self.patterns) if not p.is_dir()]
 
     def snapshot(self) -> None:
         self.saved = {p: (p.read_bytes() if p.is_file() else None) for p in self._resolve()}
         self.violations = []
 
-    def restore(self) -> List[str]:
-        reverted: List[str] = []
+    def restore(self) -> list[str]:
+        reverted: list[str] = []
         for path, before in self.saved.items():
             after = path.read_bytes() if path.is_file() else None
             if after == before:
@@ -74,8 +67,7 @@ class ProtectedFileGuard:
             rel = str(path.relative_to(self.workdir))
             try:
                 if before is None:
-                    if path.exists():
-                        path.unlink()
+                    path.unlink(missing_ok=True)
                 else:
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(before)
@@ -113,23 +105,13 @@ class Loop:
         self.model = lib.set_neural_model(self.model_name, reasoning=self.reasoning)
         self.guard = ProtectedFileGuard(self.workdir, self.protect_patterns)
 
-        self.loop_summaries: List[Dict[str, Any]] = []
-        self.items: List[str] = []
+        self.loop_summaries: list[dict[str, Any]] = []
+        self.items: list[str] = []
         self.blocker: str = ""
-        self.author_next_steps: List[str] = []
+        self.author_next_steps: list[str] = []
 
     def _protected_paths(self) -> set:
-        paths = {self.task_path.resolve()}
-        for pat in self.protect_patterns:
-            if any(c in pat for c in "*?["):
-                for p in self.workdir.glob(pat):
-                    try:
-                        paths.add(p.resolve())
-                    except OSError:
-                        pass
-            else:
-                paths.add((self.workdir / pat).resolve())
-        return paths
+        return {self.task_path.resolve(), *expand(self.workdir, self.protect_patterns)}
 
     def make_author_tools(self):
         return lib.make_tools(
@@ -189,7 +171,7 @@ class Loop:
             "- Be decisive: when the spec is met, say so and raise nothing.\n"
         )
 
-    def _author_task(self, loop_idx, loops, last_check):
+    def _author_task(self, loop_idx, loops):
         lines = [f"Loop {loop_idx} of {loops}."]
         if self.loop_summaries:
             last = self.loop_summaries[-1]
@@ -212,13 +194,6 @@ class Loop:
             lines.append("No open review items - determine the next action from the task.")
         context = "\n".join(lines)
 
-        check_line = ""
-        if last_check is not None:
-            passed, tail = last_check
-            check_line = f"\nHarness check (previous): {'PASSED' if passed else 'FAILED'}\n"
-            if tail:
-                check_line += f"```text\n{tail}\n```\n"
-
         return (
             f"{context}\n\n"
             f"Working directory: {self.workdir}\n"
@@ -233,7 +208,6 @@ class Loop:
             "- The PLAN followed\n"
             "- Exact check output\n"
             "- If INCOMPLETE: NEXT STEPS: (bulleted, 3-5 items)\n"
-            + check_line
         )
 
     def _review_task(self, loop_idx, author_answer, check_result):
@@ -286,11 +260,9 @@ class Loop:
                 if st.startswith("-") or st.startswith("*"):
                     steps.append(st.lstrip("-* ").strip())
                 else:
-                    d = 0
-                    while d < len(st) and st[d].isdigit():
-                        d += 1
-                    if d > 0 and d < len(st) and st[d:d + 2] in (". ", ") "):
-                        steps.append(st[d + 2:].strip())
+                    m = re.match(r"\d+[.)] ", st)
+                    if m:
+                        steps.append(st[m.end():].strip())
         return status, steps[:5]
 
     def _parse_review(self, text):
@@ -342,6 +314,33 @@ class Loop:
             done += 1
         return done, len(groups)
 
+    def _tally(self, tool_results):
+        """(errors, files_written, files_edited, files_read, commands) over the author's tool results"""
+        errors, files_written, files_edited, files_read, commands = [], [], [], [], []
+        for tr in tool_results:
+            args = tr.args if isinstance(tr.args, dict) else {}
+            ap = ""
+            if tr.name in ("read", "write", "edit"):
+                ap = str(args.get("path", ""))
+            elif tr.name == "bash":
+                ap = (args.get("command") or "")[:80]
+            if not tr.ok:
+                errors.append(f"{tr.name}({ap}): {(tr.output_preview or '')[:80]}")
+            elif tr.name == "write":
+                files_written.append(ap)
+            elif tr.name == "edit":
+                files_edited.append(ap)
+            elif tr.name == "read":
+                files_read.append(ap)
+            elif tr.name == "bash":
+                first = (tr.output_preview or "").splitlines()[0][:60] if tr.output_preview else ""
+                commands.append(f"{ap}  →  {first}")
+        return errors, files_written, files_edited, files_read, commands
+
+    def _stop_now(self, stop, loop_idx):
+        self.stop_reason, self.done = stop, loop_idx
+        self._vprint(f"■ {stop}, check passed (loop {loop_idx})")
+
     def run(self, loops=10):
         try:
             self.record.mkdir(parents=True, exist_ok=True)
@@ -353,8 +352,7 @@ class Loop:
 
                 self.guard.snapshot()
 
-                last_check = self.loop_summaries[-1]["check"] if self.loop_summaries else None
-                author_task = self._author_task(loop_idx, loops, last_check)
+                author_task = self._author_task(loop_idx, loops)
                 author_agent = lib.Agent(
                     self.model,
                     tools=self.make_author_tools(),
@@ -375,29 +373,8 @@ class Loop:
                     passed, _ = check_result
                     print(f"  check: {'PASS' if passed else 'FAIL'}")
 
-                errors = []
-                files_written = []
-                files_edited = []
-                files_read = []
-                commands = []
-                for tr in author_result.tool_results:
-                    args = tr.args if isinstance(tr.args, dict) else {}
-                    ap = ""
-                    if tr.name in ("read", "write", "edit"):
-                        ap = str(args.get("path", ""))
-                    elif tr.name == "bash":
-                        ap = (args.get("command") or "")[:80]
-                    if not tr.ok:
-                        errors.append(f"{tr.name}({ap}): {(tr.output_preview or '')[:80]}")
-                    elif tr.name == "write":
-                        files_written.append(ap)
-                    elif tr.name == "edit":
-                        files_edited.append(ap)
-                    elif tr.name == "read":
-                        files_read.append(ap)
-                    elif tr.name == "bash":
-                        first = (tr.output_preview or "").splitlines()[0][:60] if tr.output_preview else ""
-                        commands.append(f"{ap}  →  {first}")
+                errors, files_written, files_edited, files_read, commands = \
+                    self._tally(author_result.tool_results)
 
                 status, next_steps = self._parse_author(author_answer)
                 self.loop_summaries.append({
@@ -413,7 +390,7 @@ class Loop:
                 })
                 self.author_next_steps = next_steps
 
-                check_ok = check_result is None or (isinstance(check_result, tuple) and check_result[0])
+                check_ok = check_result is None or check_result[0]
                 # Stop only when a group completed during this run (or all did) and the
                 # check passed; a clean review alone must not end the loop mid-group.
                 stop = None
@@ -425,9 +402,7 @@ class Loop:
                         stop = f"group {done} complete"
                 if status == "COMPLETE" and stop:
                     self.items, self.blocker = [], ""
-                    self.stop_reason = stop
-                    self.done = loop_idx
-                    self._vprint(f"■ author COMPLETE, {stop}, check passed (loop {loop_idx})")
+                    self._stop_now(stop, loop_idx)
                     break
 
                 self._vprint(f"\n▶  loop {loop_idx} [review]")
@@ -448,9 +423,7 @@ class Loop:
                 self.items = pending
 
                 if stop:
-                    self.stop_reason = stop
-                    self.done = loop_idx
-                    self._vprint(f"■ {stop} and check passed (loop {loop_idx})")
+                    self._stop_now(stop, loop_idx)
                     break
 
             if self.done == 0:

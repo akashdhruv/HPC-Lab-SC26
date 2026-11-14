@@ -52,11 +52,18 @@ def is_shim(filename):
     return filename.endswith("_fi.F90")
 
 
+def scan_all():
+    """
+    Every .F90 in app/src, scanned, by name
+    """
+    return {path.name: scan(path) for path in sorted(SRC.glob("*.F90"))}
+
+
 def readiness():
     """
     One row per unit: its untranslated dependencies, who depends on it, ready or not
     """
-    files = {path.name: scan(path) for path in sorted(SRC.glob("*.F90"))}
+    files = scan_all()
 
     owner = {}
     for filename, info in files.items():
@@ -90,7 +97,7 @@ def compile_order():
     """
     Fortran files ordered so that every module is compiled before its users
     """
-    files = {path.name: scan(path) for path in sorted(SRC.glob("*.F90"))}
+    files = scan_all()
     module_file = {
         symbol: name for name, info in files.items() for symbol in info["defines"]
     }

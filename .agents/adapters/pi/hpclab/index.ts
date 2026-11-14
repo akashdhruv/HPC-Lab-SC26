@@ -9,7 +9,7 @@ import { Venv } from "./venv";
 export default function (pi: ExtensionAPI) {
 	const root = process.cwd();
 	const config = new Config(root);
-	new Venv(config.path).engage(root, config.devBinOnPath);
+	new Venv(config.path).engage(root);
 	if (!config.problem) pi.registerProvider(PROVIDER, config.provider());
 	new CompactTools(pi, root).register();
 	guardApprovals(pi);

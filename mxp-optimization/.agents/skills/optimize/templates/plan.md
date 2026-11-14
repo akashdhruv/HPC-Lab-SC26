@@ -11,7 +11,7 @@ Planned with: <orchestrator and model of the plan-mode session>
 - score: <mode, column, reduction>
 - guards and rules beyond the template: <...>
 - hints in the prompt: <...>
-- job: models <config.yaml evolve.models>, max_programs <n>, timeout <s>
+- job: model <config.yaml evolve.model>, max_programs <n>, timeout <s>
 
 ## Evidence for approval
 

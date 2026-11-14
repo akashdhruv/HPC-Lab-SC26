@@ -5,7 +5,7 @@ import platform
 import signal
 import sys
 
-from lab import Approvals, Config, Job, Venv, parent, windows_tools
+from lab import Approvals, Config, Job, Venv, parent, tail, windows_tools
 
 
 class Translation(parent(__file__)):
@@ -122,7 +122,7 @@ class Transformation:
         os.environ["PATH"] = os.pathsep.join(path)
 
         print(f"[loop] {self.name}: {loops} loop(s) with {config.model} on {platform.system()}", flush=True)
-        reasoning = str(config.get("agent.reasoning")).lower() == "true"
+        reasoning = str(config.loop("reasoning")).lower() == "true"
         run = Loop(self.path, self.system.path, "oaic-" + config.model, reasoning=reasoning).run(loops)
 
         host = {"os": platform.platform(), "python": platform.python_version()}
@@ -140,7 +140,7 @@ class Transformation:
         print(self.job.tail() or "not run")
         keep = ("run_id", "model", "loops_completed", "stop_reason")
         for record in sorted(self.runs.glob("*/run.toml"), key=lambda p: p.stat().st_mtime)[-3:]:
-            fields = [line for line in record.read_text().splitlines() if line.split(" ")[0] in keep]
+            fields = [line for line in record.read_text().splitlines() if line.split()[0] in keep]
             print("  " + "  ".join(fields))
 
     def relative(self, path):
@@ -155,9 +155,3 @@ def lines_starting(path, prefix):
     if not path.is_file():
         return []
     return [line for line in path.read_text().splitlines() if line.startswith(prefix)]
-
-
-def tail(path, n=6):
-    if not path.is_file():
-        return ""
-    return "\n".join(path.read_text().splitlines()[-n:])

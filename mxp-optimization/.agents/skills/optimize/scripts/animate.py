@@ -60,8 +60,11 @@ class Animation:
         if status.is_file() and json.loads(status.read_text())["state"] == "running":
             sys.exit("a search is running in app/: wait for it or stop it first")
 
-        source = self.path / "results" / "candidates" / f"{candidate}.cpp" if candidate else self.kernel_path
-        label = f"candidate {candidate}" if candidate else "applied candidate"
+        if candidate:
+            source = self.path / "results" / "candidates" / f"{candidate}.cpp"
+            label = f"candidate {candidate}"
+        else:
+            source, label = self.kernel_path, "applied candidate"
         seed = self.path / "seed.cpp"
         if source.read_bytes() == seed.read_bytes():
             sys.exit(f"{source.name} is the seed: harvest, then pass a candidate id")
@@ -190,8 +193,8 @@ def read_history(outdir):
     rows = (outdir / "history.csv").read_text().splitlines()
     header = rows[0].split(",")
     time, error = header.index("time"), header.index("err_shape")
-    values = numpy.array([[float(row.split(",")[time]), float(row.split(",")[error])]
-                          for row in rows[1:]])
+    cells = [row.split(",") for row in rows[1:]]
+    values = numpy.array([[float(c[time]), float(c[error])] for c in cells])
     return values[numpy.isfinite(values[:, 1])]
 
 

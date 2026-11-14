@@ -365,7 +365,7 @@ class Config:
 
     def get(self, key, default=""):
         """
-        A dotted key ("agent.model"), with ${VARIABLES} expanded. A value starting
+        A dotted key ("pi.model"), with ${VARIABLES} expanded. A value starting
         with "!" is run as a shell command and its stdout is used (as pi does).
         """
         value = self.data
@@ -375,7 +375,6 @@ class Config:
             return default
         value = os.path.expandvars(str(value))
         if value.startswith("!"):
-            import subprocess
             try:
                 out = subprocess.run(value[1:], shell=True, capture_output=True, text=True, timeout=30)
                 if out.returncode == 0 and out.stdout.strip():
@@ -387,7 +386,12 @@ class Config:
 
     @property
     def model(self):
-        return self.get("agent.loop_model") or self.get("agent.model")
+        """The loop's model (loop.model, else pi.model)"""
+        return self.loop("model")
+
+    def loop(self, key, default=""):
+        """A loop: key, falling back to pi: (it runs on pi's endpoint)"""
+        return self.get("loop." + key) or self.get("pi." + key, default)
 
     def claude_settings(self):
         """
@@ -398,9 +402,9 @@ class Config:
         model = self.get("claude.model")
         env = {
             "ANTHROPIC_BASE_URL": self.get("claude.base_url") or sys.exit(f"set claude.base_url in {self.path}"),
-            "ANTHROPIC_DEFAULT_OPUS_MODEL": self.get("claude.opus_model", model),
-            "ANTHROPIC_DEFAULT_SONNET_MODEL": self.get("claude.sonnet_model", model),
-            "ANTHROPIC_DEFAULT_HAIKU_MODEL": self.get("claude.haiku_model", model),
+            "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
             "CLAUDE_CODE_MAX_OUTPUT_TOKENS": self.get("claude.max_output_tokens"),
         }
         if self.get("claude.api_key"):
@@ -416,7 +420,7 @@ class Config:
         """
         for key in ["OPENAI_COMP_BASEURL", "OPENAI_COMP_APIKEY", "OPENAI_COMP_PROVIDER"]:
             env[key] = self.get(key) or sys.exit(f"set {key} in {self.path}")
-        env["CODESCRIBE_MAX_TOKENS"] = self.get("agent.max_tokens", "16384")
+        env["CODESCRIBE_MAX_TOKENS"] = self.loop("max_tokens", "16384")
         return env
 
 
@@ -462,9 +466,15 @@ class Job:
         return pid
 
     def tail(self, n=6):
-        if not self.log.is_file():
-            return ""
-        return "\n".join(self.log.read_text().splitlines()[-n:])
+        return tail(self.log, n)
+
+
+def tail(path, n=6):
+    """The last n lines of path, or """""
+    path = Path(path)
+    if not path.is_file():
+        return ""
+    return "\n".join(path.read_text().splitlines()[-n:])
 
 
 def alive(pid):
@@ -517,7 +527,6 @@ class Venv:
         if self.python.is_file() and self.stamp.is_file() and self.stamp.read_text() == want:
             return self
         print(f"setting up {self.path.name} ...", file=sys.stderr)
-        # check if uv is available
         uv = shutil.which("uv")
         if not self.python.is_file():
             if uv:
@@ -631,7 +640,7 @@ def link(path, target):
             shutil.copyfile(target, path)
 
 
-# --- Orchestrator PATH (config.yaml: orchestrator.dev_bin_on_path) --------------------------------
+# --- Orchestrator PATH (the stub folders are always first on PATH) --------------------------------
 
 
 def stub_folders(start):
@@ -650,5 +659,4 @@ def stub_folders(start):
 
 
 if __name__ == "__main__" and sys.argv[1:2] == ["bins"]:  # the Claude Code hook: .agents/adapters/claude
-    if str(Config().get("orchestrator.dev_bin_on_path")).lower() == "true":
-        print("\n".join(stub_folders(sys.argv[2] if len(sys.argv) > 2 else ".")))
+    print("\n".join(stub_folders(sys.argv[2] if len(sys.argv) > 2 else ".")))

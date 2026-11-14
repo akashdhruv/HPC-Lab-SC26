@@ -1,9 +1,9 @@
-// Reads the tutorial's config.yaml and turns it into the "hpclab/agent" pi provider.
+// Reads the tutorial's config.yaml and turns it into the "hpclab/pi" pi provider.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const PROVIDER = "hpclab";
-export const MODEL = "agent";
+export const MODEL = "pi";
 
 export class Config {
 	readonly path: string;
@@ -15,18 +15,17 @@ export class Config {
 		if (!existsSync(this.path)) { this.problem = `config.yaml not found above ${start}`; return; }
 		this.data = Config.parse(readFileSync(this.path, "utf8"));
 		if (!this.baseUrl || !this.apiKey) this.problem = `set OPENAI_COMP_BASEURL and OPENAI_COMP_APIKEY in ${this.path}`;
-		else if (!this.model) this.problem = `set agent.model in ${this.path}`;
+		else if (!this.model) this.problem = `set pi.model in ${this.path}`;
 	}
 
 	get baseUrl(): string { return this.data.OPENAI_COMP_BASEURL ?? ""; }
 	get apiKey(): string { return this.data.OPENAI_COMP_APIKEY ?? ""; }
-	get agent(): Record<string, any> { return this.data.agent ?? {}; }
-	get model(): string { return this.agent.model ?? ""; }
-	get devBinOnPath(): boolean { return this.data.orchestrator?.dev_bin_on_path === true; }
+	get pi(): Record<string, any> { return this.data.pi ?? {}; }
+	get model(): string { return this.pi.model ?? ""; }
 	get host(): string { try { return new URL(this.baseUrl).host; } catch { return this.baseUrl; } }
 
 	provider() {
-		const a = this.agent;
+		const a = this.pi;
 		return {
 			baseUrl: this.baseUrl,
 			apiKey: this.apiKey,

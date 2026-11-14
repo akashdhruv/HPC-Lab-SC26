@@ -1,6 +1,6 @@
 // The tutorial's .venv first on PATH for the agent's commands (tools make and activate it themselves);
-// before it, with orchestrator.dev_bin_on_path in config.yaml, the stubs of every level from the
-// session's folder up to the root, deepest first: each system's dev/bin, then the root's tools/.
+// before it, the stubs of every level from the session's folder up to the root, deepest first:
+// each system's dev/bin, then the root's tools/.
 import { existsSync } from "node:fs";
 import { delimiter, dirname, join, relative } from "node:path";
 
@@ -22,10 +22,10 @@ export class Venv {
 		}
 	}
 
-	engage(start: string, devBin: boolean) {
+	engage(start: string) {
 		const key = Object.keys(process.env).find((k) => k.toLowerCase() === "path") ?? "PATH";
 		process.env.VIRTUAL_ENV = this.path;
-		const front = [...(devBin ? this.bins(start) : []), this.bin];
+		const front = [...this.bins(start), this.bin];
 		process.env[key] = [...front, process.env[key]].filter(Boolean).join(delimiter);
 	}
 }
