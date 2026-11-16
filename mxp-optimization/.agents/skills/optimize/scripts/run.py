@@ -23,6 +23,7 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 MXP = HERE.parents[3]  # .agents/skills/optimize/scripts
+TUTORIAL = HERE.parents[4]
 FAILED = -1e12
 
 # Red-team edits inside the EVOLVE-BLOCK: (name, old, new); an empty old prepends new
@@ -44,6 +45,33 @@ def interrupt(*_):
     docker stop sends SIGTERM: stop the search like Ctrl-C, so its state is recorded
     """
     raise KeyboardInterrupt
+
+
+class Endpoint:
+    """Model endpoint from the tutorial's config.yaml"""
+
+    def __init__(self, path=TUTORIAL / "config.yaml"):
+        if not path.is_file():
+            sys.exit(f"{path} missing")
+
+        config = yaml.safe_load(path.read_text()) or {}
+        def resolve(value):
+            value = os.path.expandvars(str(value or ""))
+            if value.startswith("!"):
+                try:
+                    out = subprocess.run(value[1:], shell=True, capture_output=True, text=True, timeout=30)
+                    if out.returncode == 0 and out.stdout.strip():
+                        return out.stdout.strip()
+                except Exception:
+                    pass
+                return ""
+            return value
+        self.base_url = resolve(config.get("OPENAI_COMP_BASEURL", ""))
+        self.api_key = resolve(config.get("OPENAI_COMP_APIKEY", ""))
+        self.evolve = config.get("evolve") or {}
+
+        if not self.base_url or not self.api_key:
+            sys.exit(f"set OPENAI_COMP_BASEURL and OPENAI_COMP_APIKEY in {path}")
 
 
 class Run:
@@ -145,17 +173,24 @@ class Run:
         (self.results / "redteam.md").write_text(f"{table}\n\n{holes} hole(s)\n")
         sys.exit(1 if holes else 0)
 
-    def openevolve_config(self, spec):
+    def openevolve_config(self, spec, endpoint):
         """
-        OpenEvolve's config from experiment.yaml and OE_LLM, the model dev/bin/evolve passes
+        OpenEvolve's config from experiment.yaml and config.yaml's evolve section
         """
-        if "OE_LLM" not in os.environ:
-            sys.exit("start the search with dev/bin/evolve [--resume] <R>")
-        options = {**json.loads(os.environ["OE_LLM"]), **(spec.get("openevolve") or {})}
-        llm = {k: v for k, v in options.items() if k != "model" and v}
-        llm["models"] = [{"name": options["model"], "weight": 1.0}]
-        if "api_base" in llm:
-            llm["api_key"] = "${OPENAI_API_KEY}"
+        options = {**endpoint.evolve, **(spec.get("openevolve") or {})}
+        model = options.get("model")
+        if not model:
+            sys.exit("set evolve.model in config.yaml")
+
+        llm = {
+            "models": [{"name": model, "weight": 1.0}],
+            "api_base": endpoint.base_url,
+            "api_key": "${OPENAI_API_KEY}",
+            "max_tokens": options.get("max_tokens", 16000),
+            "timeout": options.get("timeout", 300),
+        }
+        if options.get("reasoning_effort"):
+            llm["reasoning_effort"] = options["reasoning_effort"]
 
         return {
             "max_iterations": spec["max_programs"],
@@ -193,7 +228,7 @@ class Run:
         """
         Score the seed, then run OpenEvolve until max_programs
         """
-        spec = self.spec()
+        spec, endpoint = self.spec(), Endpoint()
 
         output = self.results / "openevolve"
         program = self.results / "initial_program.cpp"
@@ -210,7 +245,7 @@ class Run:
 
         config = output / "config.yaml"
         config.write_text(
-            yaml.safe_dump(self.openevolve_config(spec), sort_keys=False)
+            yaml.safe_dump(self.openevolve_config(spec, endpoint), sort_keys=False)
         )
 
         command = [
@@ -230,6 +265,7 @@ class Run:
         env = {
             **os.environ,
             "EVAL_LOG": str(self.results / "evaluations.jsonl"),
+            "OPENAI_API_KEY": endpoint.api_key,
             "OE_EVALUATOR": str(self.path / "evaluator.py"),
             "OE_TIMEOUT": str(spec["timeout"]),
             "OE_PYTHON": sys.executable,

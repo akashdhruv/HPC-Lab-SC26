@@ -69,8 +69,9 @@ tools/                      the root
 6. Agents call tools by path (`dev/bin/oracle`, `../tools/container`); the adapters (Claude Code's
    venv.sh, pi's hpclab extension) also put the system's `dev/bin`, then `tools/`, on PATH, so a
    bare `container` resolves as rule 4 does. `approve` stays the scientist's: the adapters block it.
-   `tools/setup` writes the models of `config.yaml`'s `claude:` to each `.claude/settings.local.json`
-   (other keys stay) and of `codex:` to `.codex/config.toml`. Rerun it after editing.
+   With `claude.enabled: true` in `config.yaml`, `tools/setup` writes Claude Code's endpoint
+   (`ANTHROPIC_BASE_URL`, the model, `apiKeyHelper`) to each `.claude/settings.local.json`
+   (its `env`, `model` and `apiKeyHelper` keys; others stay). Rerun setup after editing.
 
 ## Portability
 

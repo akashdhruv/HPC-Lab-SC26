@@ -82,7 +82,7 @@ You need git, Docker, Python >= 3.10 and one orchestrator (Node.js too if it is
 ```bash
 git clone --recursive <this repo> && cd SC26-Tutorial
 tools/setup              # .venv, orchestrator links, docker images, both checks (--native skips docker)
-$EDITOR config.yaml      # your harness and access (subscription, API key, OpenRouter); then setup again
+$EDITOR config.yaml      # model endpoint and key for the harnesses (and pi)
 ```
 
 Then open an agent in a system folder and ask for a stage.
@@ -119,7 +119,7 @@ Each system's `AGENTS.md` has the details, and
 ## Layout
 
 ```
-config.yaml                  models for your access: harness, openai:, pi:, loop:, evolve:, claude:, codex:
+config.yaml                  model endpoint of pi, the loop, evolve and Claude Code (pi:, loop:, evolve:, claude:)
 tools/                       setup and what every system inherits (tools/README.md: the contract)
                              approve, container; lab.py (class Lab, levels, dispatch)
 .agents/adapters/            Claude Code and pi settings and extension, linked by setup

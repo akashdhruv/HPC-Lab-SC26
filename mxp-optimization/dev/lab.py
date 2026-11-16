@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from lab import Approvals, Config, Job, parent
+from lab import Approvals, Job, parent
 
 
 class Mxp(parent(__file__)):
@@ -56,8 +56,7 @@ class Mxp(parent(__file__)):
     def evolve(self, *args):
         """
         [--status|--stop|--resume] <R>: the OpenEvolve search of an approved optimize run, in the
-        detached container hpc-lab-mxp-optimization; it outlives the session, one at a time;
-        the model is config.yaml's for its harness.
+        detached container hpc-lab-mxp-optimization; it outlives the session, one at a time.
         --status: running or not, scores, the tail of <R>/results/evolve.log; --stop: stop it, the
         search records its state; --resume: continue from the last checkpoint.
         """
@@ -118,10 +117,7 @@ class Search:
         Approvals(self.run).require("plan")
         if self.docker.running():
             sys.exit(f"a search is already running in {self.docker.name}; dev/bin/evolve --status <R>")
-        llm, env, mounts = Config().search()
-        env["OE_LLM"] = json.dumps(llm)
-        if self.docker.run(["dev/tools/search.sh", self.run, action], detach=True, env=env, mounts=mounts) == 0:
-            print(f"model {llm['model']} via {llm.get('provider') or llm['api_base']}")
+        if self.docker.run(["dev/tools/search.sh", self.run, action], detach=True) == 0:
             print(f"search started in {self.docker.name}; dev/bin/evolve --status {self.run}")
 
     def stop(self):

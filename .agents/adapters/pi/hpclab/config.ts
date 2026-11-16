@@ -14,12 +14,12 @@ export class Config {
 		this.path = Config.find(start);
 		if (!existsSync(this.path)) { this.problem = `config.yaml not found above ${start}`; return; }
 		this.data = Config.parse(readFileSync(this.path, "utf8"));
-		if (!this.baseUrl || !this.apiKey) this.problem = `set openai.base_url and openai.api_key in ${this.path}`;
+		if (!this.baseUrl || !this.apiKey) this.problem = `set OPENAI_COMP_BASEURL and OPENAI_COMP_APIKEY in ${this.path}`;
 		else if (!this.model) this.problem = `set pi.model in ${this.path}`;
 	}
 
-	get baseUrl(): string { return this.data.openai?.base_url ?? ""; }
-	get apiKey(): string { return this.data.openai?.api_key ?? ""; }
+	get baseUrl(): string { return this.data.OPENAI_COMP_BASEURL ?? ""; }
+	get apiKey(): string { return this.data.OPENAI_COMP_APIKEY ?? ""; }
 	get pi(): Record<string, any> { return this.data.pi ?? {}; }
 	get model(): string { return this.pi.model ?? ""; }
 	get host(): string { try { return new URL(this.baseUrl).host; } catch { return this.baseUrl; } }

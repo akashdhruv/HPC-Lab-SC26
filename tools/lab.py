@@ -243,7 +243,8 @@ class Lab(Level):
             run(shutil.which("npm"), "install", "-g", "@earendil-works/pi-coding-agent")
         if shutil.which("pi"):
             print("pi ready")
-        print(Config().summary())
+        if "<your key>" in (ROOT / "config.yaml").read_text():
+            print("edit config.yaml: OPENAI_COMP_APIKEY")
         if "--native" in flags:
             return
 
@@ -280,24 +281,19 @@ class Container:
         self.workdir = "/work/" + level.path.relative_to(ROOT).as_posix()
         self.name = f"hpc-lab-{level.name}"  # the detached container: one at a time per system
 
-    def command(self, args, detach=False, env=(), mounts=None):
-        """env: names, their values passed by run(), never on the command line; mounts: {host: container}"""
+    def command(self, args, detach=False):
         options = ["--rm", "--init", "-w", self.workdir,
                    "--mount", f"type=bind,source={ROOT},target=/work"]
-        for source, target in (mounts or {}).items():
-            options += ["--mount", f"type=bind,source={source},target={target}"]
         if hasattr(os, "getuid"):
             options += ["--user", f"{os.getuid()}:{os.getgid()}"]
-        for name in ["MAX_PROGRAMS", *env]:
-            if name in env or os.environ.get(name):
-                options += ["-e", name]
+        if os.environ.get("MAX_PROGRAMS"):
+            options += ["-e", f"MAX_PROGRAMS={os.environ['MAX_PROGRAMS']}"]
         if detach:
             options += ["-d", "--name", self.name]
         return ["docker", "run", *options, self.image, *args]
 
-    def run(self, args, detach=False, env=None, mounts=None):
-        env = env or {}
-        return subprocess.call(self.command(args, detach, env, mounts), env={**os.environ, **env})
+    def run(self, args, detach=False):
+        return subprocess.call(self.command(args, detach))
 
     def build(self):
         return subprocess.call(["docker", "build", "-t", self.image, str(self.level.path)])
@@ -356,7 +352,7 @@ class Approvals:
 
 class Config:
     """
-    config.yaml: the models for the access the user brings (its header has the table)
+    config.yaml: the model endpoint of the harnesses (CodeScribe loop, OpenEvolve)
     """
 
     def __init__(self, path=ROOT / "config.yaml"):
@@ -369,98 +365,63 @@ class Config:
 
     def get(self, key, default=""):
         """
-        A dotted key ("pi.model"), ${VARIABLES} expanded ("" if unset); "!cmd": its stdout
+        A dotted key ("pi.model"), with ${VARIABLES} expanded. A value starting
+        with "!" is run as a shell command and its stdout is used (as pi does).
         """
         value = self.data
         for part in key.split("."):
             value = value.get(part) if isinstance(value, dict) else None
-        value = os.path.expandvars(str(value or ""))
+        if value in (None, ""):
+            return default
+        value = os.path.expandvars(str(value))
         if value.startswith("!"):
-            value = shell(value[1:])
-        return default if re.fullmatch(r"|\$\{\w+\}|<your key>", value) else value
-
-    @property
-    def harness(self):
-        harness = self.get("harness", "pi")
-        if harness not in ("pi", "claude", "codex"):
-            sys.exit(f"harness: pi, claude or codex in {self.path}")
-        return harness
-
-    def need(self, key):
-        return self.get(key) or sys.exit(f"set {key} in {self.path}")
-
-    def endpoint(self):
-        """openai: (base_url, api_key)"""
-        if not (self.get("openai.base_url") and self.get("openai.api_key")):
-            sys.exit(f"needs an OpenAI-compatible API, openai: in {self.path}")
-        return self.get("openai.base_url"), self.get("openai.api_key")
+            try:
+                out = subprocess.run(value[1:], shell=True, capture_output=True, text=True, timeout=30)
+                if out.returncode == 0 and out.stdout.strip():
+                    return out.stdout.strip()
+            except Exception:
+                pass
+            return default
+        return value
 
     @property
     def model(self):
-        """The loop's model"""
+        """The loop's model (loop.model, else pi.model)"""
         return self.loop("model")
 
     def loop(self, key, default=""):
-        """A loop: key, else pi:'s"""
+        """A loop: key, falling back to pi: (it runs on pi's endpoint)"""
         return self.get("loop." + key) or self.get("pi." + key, default)
 
+    def claude_settings(self):
+        """
+        Claude Code settings for the claude: endpoint of config.yaml; {} unless claude.enabled
+        """
+        if self.get("claude.enabled").lower() != "true":
+            return {}
+        model = self.get("claude.model")
+        env = {
+            "ANTHROPIC_BASE_URL": self.get("claude.base_url") or sys.exit(f"set claude.base_url in {self.path}"),
+            "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
+            "CLAUDE_CODE_MAX_OUTPUT_TOKENS": self.get("claude.max_output_tokens"),
+        }
+        if self.get("claude.api_key"):
+            env["ANTHROPIC_AUTH_TOKEN"] = self.get("claude.api_key")
+        settings = {"env": {k: v for k, v in env.items() if v}, "model": model}
+        if self.get("claude.api_key_helper"):
+            settings["apiKeyHelper"] = self.get("claude.api_key_helper")
+        return settings
+
     def export(self, env):
-        """openai: as the OPENAI_COMP_* variables of CodeScribe (the loop)"""
-        env["OPENAI_COMP_BASEURL"], env["OPENAI_COMP_APIKEY"] = self.endpoint()
-        env["OPENAI_COMP_PROVIDER"] = self.get("openai.provider", "openai")
+        """
+        The endpoint as the OPENAI_COMP_* variables CodeScribe reads
+        """
+        for key in ["OPENAI_COMP_BASEURL", "OPENAI_COMP_APIKEY", "OPENAI_COMP_PROVIDER"]:
+            env[key] = self.get(key) or sys.exit(f"set {key} in {self.path}")
         env["CODESCRIBE_MAX_TOKENS"] = self.loop("max_tokens", "16384")
         return env
-
-    def search(self):
-        """
-        The search's model under the harness: OpenEvolve's llm options, its container's env and mounts
-        """
-        harness = self.harness
-        llm = {"model": self.get("evolve.model") or self.get(f"{harness}.model"),
-               "max_tokens": int(self.get("evolve.max_tokens", "16000")),
-               "timeout": int(self.get("evolve.timeout", "300")),
-               "reasoning_effort": self.get("evolve.reasoning_effort") or self.get(f"{harness}.reasoning_effort")}
-        llm["model"] or sys.exit(f"set evolve.model or {harness}.model in {self.path}")
-        # The CLIs' settings are the root's .claude/ and .codex/ (tools/setup), at /work in the container
-        if harness == "claude":
-            key = self.need("claude.key")  # an API key, or an OAuth token (`claude setup-token`)
-            name = "CLAUDE_CODE_OAUTH_TOKEN" if key.startswith("sk-ant-oat") else "ANTHROPIC_API_KEY"
-            return {**llm, "provider": "claude_code"}, {name: key, "CLAUDE_CONFIG_DIR": "/work/.claude", "HOME": "/tmp"}, {}
-        if harness == "codex":
-            (ROOT / ".codex" / "auth.json").is_file() or sys.exit(
-                f"no Codex login in {ROOT / '.codex'}: CODEX_HOME={ROOT / '.codex'} codex login")
-            return {**llm, "provider": "codex_app_server"}, {"CODEX_HOME": "/work/.codex", "HOME": "/tmp"}, {}
-        base, key = self.endpoint()
-        return {**llm, "api_base": base}, {"OPENAI_API_KEY": key}, {}
-
-    def claude_settings(self):
-        """claude: as settings.local.json keys"""
-        return {"model": self.get("claude.model")} if self.get("claude.model") else {}
-
-    def codex_settings(self):
-        """codex: as .codex/config.toml"""
-        keys = {"model": self.get("codex.model"), "model_reasoning_effort": self.get("codex.reasoning_effort")}
-        return "".join(f"{k} = {json.dumps(v)}\n" for k, v in keys.items() if v)
-
-    def summary(self):
-        def ready(test):
-            try:
-                test()
-                return "ready"
-            except SystemExit as error:
-                return f"not ready: {error}"
-        return (f"config.yaml: harness {self.harness}; loop {ready(self.endpoint)}; "
-                f"search {ready(self.search)}")
-
-
-def shell(command):
-    """A command's stdout, "" if it fails"""
-    try:
-        out = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
-        return out.stdout.strip() if out.returncode == 0 else ""
-    except Exception:
-        return ""
-
 
 
 class Job:
@@ -637,38 +598,28 @@ class Orchestrators:
     }
 
     def link_all(self):
-        config = Config()
         for folder in [ROOT, *sorted(p.parent for p in ROOT.glob("*/AGENTS.md"))]:
             links = {path: ROOT / target for path, target in self.LINKS.items()}
             if (folder / ".agents" / "skills").is_dir():
                 links[".claude/skills"] = folder / ".agents" / "skills"
             for path, target in links.items():
                 link(folder / path, target)
-            self.claude(folder / ".claude" / "settings.local.json", config.claude_settings())
-            self.codex(folder / ".codex" / "config.toml", config.codex_settings())
-        print("Claude Code and pi linked to .agents; claude: and codex: written")
+            self.claude_endpoint(folder / ".claude" / "settings.local.json")
+        print("Claude Code and pi linked to .agents")
 
-    def claude(self, path, ours):
-        """claude: merged into settings.local.json; the user's other keys stay"""
+    def claude_endpoint(self, path):
+        """
+        The config.yaml claude: endpoint merged into settings.local.json (the user's other keys stay)
+        """
         keys = ["env", "model", "apiKeyHelper"]
         settings = json.loads(path.read_text()) if path.is_file() else {}
         settings = {k: v for k, v in settings.items() if k not in keys}
-        settings.update(ours)
+        settings.update(Config().claude_settings())
         if settings:
             path.write_text(json.dumps(settings, indent=2) + "\n")
         elif path.is_file():
             path.unlink()
 
-    def codex(self, path, ours):
-        """codex: as .codex/config.toml, unless the user wrote that file"""
-        mark = "# tools/setup, from config.yaml codex:\n"
-        if path.is_file() and not path.read_text().startswith(mark):
-            return
-        if ours:
-            path.parent.mkdir(exist_ok=True)
-            path.write_text(mark + ours)
-        elif path.is_file():
-            path.unlink()
 
 def link(path, target):
     """
