@@ -1,6 +1,6 @@
 # Toolchain for mxp-optimization when RAPTOR is not installed natively: Ubuntu 24.04, OpenMPI,
 # LLVM/clang 20, MPFR, RAPTOR and OpenEvolve built from the dev/tools submodules; ffmpeg and
-# matplotlib for the animation.
+# matplotlib for the animation; the Claude Code and Codex CLIs for the search (config.yaml harness).
 # Build from mxp-optimization/; the repository is mounted at run time by the container verb (../tools/README.md).
 
 FROM ubuntu:24.04 AS toolchain
@@ -39,6 +39,10 @@ RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir /opt/s
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && /opt/venv/bin/pip install --no-cache-dir matplotlib
+
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g @anthropic-ai/claude-code @openai/codex && npm cache clean --force
 
 ENV RAPTOR_INSTALL_DIR=/opt/raptor-install \
     PY=/opt/venv/bin/python \

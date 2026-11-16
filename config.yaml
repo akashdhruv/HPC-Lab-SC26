@@ -1,17 +1,18 @@
-# Model endpoint of the agent systems: any OpenAI-compatible API.
+# Models for the access you bring. "${NAME}" reads the environment; "!cmd" runs a command (not pi:).
 #
-# pi:     the model of pi sessions (both systems).
-# loop:   the model of the CodeScribe loop (code-translation), like evolve its own section; a
-#         key not set here falls back to pi: (loop.model defaults to pi.model, likewise
-#         reasoning and max_tokens).
-# evolve: the model OpenEvolve samples candidates from (mxp-optimization).
-# claude: Claude Code on an Anthropic-compatible endpoint (tools/setup writes it to each
-#   .claude/settings.local.json; rerun setup after editing). Off: Claude Code uses its own login.
-# A value may read an environment variable: "${NAME}".
+#   harness   with                             agent     loop (code-translation)   search (mxp-optimization)
+#   pi        an API key or OpenRouter         openai:   openai:                   openai:
+#   claude    a Claude subscription            claude:   -                         Claude Code CLI
+#   codex     a ChatGPT (Codex) subscription   codex:    -                         Codex CLI
+#
+# Subscriptions have no API access: mxp-optimization only. Rerun tools/setup after editing.
 
-OPENAI_COMP_BASEURL: "https://inference-api.alcf.anl.gov/resource_server/minerva/api/v1"
-OPENAI_COMP_APIKEY: "!alcf-tokens get-token inference"
-OPENAI_COMP_PROVIDER: "alcf"
+harness: claude
+
+openai:
+  base_url: "https://inference-api.alcf.anl.gov/resource_server/minerva/api/v1"
+  api_key: "<your-key-here>"
+  provider: "alcf"
 
 pi:
   model: "mistral-large-4-nvfp4"
@@ -22,18 +23,18 @@ pi:
   supports_reasoning_effort: false
 
 loop:
-  model: "beam-1.0-bf16"
+  model: ""
 
 evolve:
-  model: "beam-1.0-bf16"
+  model: ""
   max_tokens: 16000
   timeout: 300
 
-claude:
-  enabled: true
-  base_url: "https://inference-api.alcf.anl.gov/resource_server/minerva/api"  # ANTHROPIC_BASE_URL
-  model: "mistral-large-4-nvfp4"   # sets opus, sonnet and haiku alike
-  max_output_tokens: 32000
-  # One of: a command printing the key/token (apiKeyHelper), or a key ("${NAME}" reads the env).
-  api_key_helper: "alcf-tokens get-token inference"
-  api_key: ""
+claude:                        # your `claude` login
+  model: "mistral-large-4-nvfp4"
+  key: "<your-key-here>" # the search's: an API key, or an OAuth token (`claude setup-token`)
+
+
+codex:                         # your `codex login`
+  model: "gpt-6.1-sol"
+  reasoning_effort: ""         # low | medium | high

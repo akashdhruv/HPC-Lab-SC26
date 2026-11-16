@@ -6,7 +6,7 @@ object: advect.o
 max_programs: 10
 timeout: 300
 
-# Per-run override of config.yaml evolve:
+# Per-run override of the model config.yaml gives the search:
 # openevolve: {model: "<model>", max_tokens: 16000, reasoning_effort: low}
 
 problem: |
