@@ -26,7 +26,7 @@ accepted in the same E. Commands run from `mxp-optimization/`; everything runs i
 | score | -(mean over steps of `err_shape`): M, the mean distance between the fp8 and fp64 interfaces in cells; raptorize's eval run (64², t = 0.5) |
 | guards | equivalence: the candidate's fp64 run reproduces the seed's (1e-10) |
 | rules | types stay double, no library calls but min/max/abs, no preprocessor |
-| job | model from config.yaml `evolve`, max_programs 10, timeout 300 s |
+| job | model from config.yaml `evolve`, max_programs 10, timeout 300 s; `evolve.provider`: `"auto"` (default) = the session's orchestrator — claude → `claude_code`, codex → `codex_app_server` (that CLI headless), pi/other → `openai` on the endpoint in config.yaml; pin one explicitly, or per-run via `openevolve:` in experiment.yaml. `evolve.budget` caps each CLI-backend call |
 
 3. Calibrate: `../tools/container make evaluate EXP=<R>` twice, identical scores; put the seed score
    in the problem. The fp8 seed is NaN (`NAN_OR_INF`, score null): then two identical labels, and
@@ -39,7 +39,13 @@ accepted in the same E. Commands run from `mxp-optimization/`; everything runs i
 1. Act: `dev/bin/evolve <R>` starts the search in the detached container
    `hpc-lab-mxp-optimization` (it refuses an unapproved plan or a second search); it outlives
    the session. From any session: `dev/bin/evolve --status <R>` (running or not, scores, log),
-   `--stop <R>` ends it, `--resume <R>` continues from the last checkpoint.
+   `--stop <R>` ends it, `--resume <R>` continues from the last checkpoint. The search samples
+   with the LLM backend of config.yaml `evolve.provider`: `"auto"` (the default) resolves to
+   this session's orchestrator — under Claude Code or Codex, `claude_code` / `codex_app_server`,
+   OpenEvolve's backends that run that CLI headless; under pi or anything else, `openai` on the
+   endpoint in config.yaml. The container mounts the host's `~/.claude` / `~/.codex`
+   (`CLAUDE_CONFIG_DIR` / `CODEX_HOME`), so a CLI backend uses the host's login: `claude login`
+   / `codex login` once on the host. `evolve.budget` caps each CLI-backend call.
 2. Verify: `../tools/container make harvest EXP=<R>` (each candidate and its diff against the seed
    in results/candidates/); for the top 3, read the diff and say why the rewrite reduces rounding
    error while staying exact in real arithmetic; re-score the best.

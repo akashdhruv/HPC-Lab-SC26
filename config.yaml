@@ -1,15 +1,23 @@
-# Model endpoint of the agent systems: any OpenAI-compatible API.
+# The model endpoint of the harnesses: any OpenAI-compatible API. The orchestrators (Claude
+# Code, Codex, pi, ...) bring their own model configuration; setup links only their skills and
+# adapter settings, never their model settings.
 #
 # pi:     the model of pi sessions (both systems).
 # loop:   the model of the CodeScribe loop (code-translation), like evolve its own section; a
 #         key not set here falls back to pi: (loop.model defaults to pi.model, likewise
-#         reasoning and max_tokens).
-# evolve: the model OpenEvolve samples candidates from (mxp-optimization).
-# claude: Claude Code on an Anthropic-compatible endpoint (tools/setup writes it to each
-#   .claude/settings.local.json; rerun setup after editing). Off: Claude Code uses its own login.
+#         reasoning, max_tokens and nloop).
+# evolve: the model OpenEvolve samples candidates from (mxp-optimization). provider: "auto"
+#         — the orchestrator of the session that starts the search: claude -> "claude_code",
+#         codex -> "codex_app_server" (both run that CLI headless; the container mounts the
+#         host's ~/.claude / ~/.codex, so `claude login` / `codex login` once on the host is
+#         enough), pi or anything else -> "openai", the endpoint above. Set openai /
+#         claude_code / codex_app_server to pin one. model: under "openai", evolve.model else
+#         pi.model; under a CLI backend, evolve.model (assumed available through the user's CLI
+#         login), else the CLI's own alias (per-run: openevolve: model). budget: a per-call cap
+#         for the CLI backends, e.g. "$5".
 # A value may read an environment variable: "${NAME}".
 
-OPENAI_COMP_BASEURL: "https://inference-api.alcf.anl.gov/resource_server/minerva/api/v1"
+OPENAI_COMP_BASEURL: "https://inference-api.alcf.anl.gov/resource_server/tara/api/v1"
 OPENAI_COMP_APIKEY: "!alcf-tokens get-token inference"
 OPENAI_COMP_PROVIDER: "alcf"
 
@@ -22,18 +30,12 @@ pi:
   supports_reasoning_effort: false
 
 loop:
-  model: "beam-1.0-bf16"
+  model: "beam-1.0-bf8"
+  nloop: "5"
 
 evolve:
-  model: "beam-1.0-bf16"
+  model: "beam-1.0-bf8"
+  provider: "auto"
   max_tokens: 16000
   timeout: 300
-
-claude:
-  enabled: true
-  base_url: "https://inference-api.alcf.anl.gov/resource_server/minerva/api"  # ANTHROPIC_BASE_URL
-  model: "mistral-large-4-nvfp4"   # sets opus, sonnet and haiku alike
-  max_output_tokens: 32000
-  # One of: a command printing the key/token (apiKeyHelper), or a key ("${NAME}" reads the env).
-  api_key_helper: "alcf-tokens get-token inference"
-  api_key: ""
+  budget: "$5"

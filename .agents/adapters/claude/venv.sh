@@ -1,6 +1,8 @@
 #!/bin/sh
 # SessionStart hook: puts the tutorial's .venv first on PATH for Claude Code's commands.
 # The stub folders go before it: the session's system dev/bin, then tools/ (tools/lab.py bins).
+# HPCLAB_ORCHESTRATOR tells the tools which orchestrator this session is (dev/bin/evolve maps
+# it to OpenEvolve's backend; claude also sets CLAUDECODE itself).
 
 session=$PWD
 cd "$(git rev-parse --show-toplevel)" || exit 0
@@ -16,3 +18,4 @@ done
 
 echo "export VIRTUAL_ENV=\"$PWD/.venv\"" >> "$CLAUDE_ENV_FILE"
 echo "export PATH=\"$stubs$PWD/.venv/bin:$PWD/.venv/Scripts:\$PATH\"" >> "$CLAUDE_ENV_FILE"
+echo "export HPCLAB_ORCHESTRATOR=claude" >> "$CLAUDE_ENV_FILE"

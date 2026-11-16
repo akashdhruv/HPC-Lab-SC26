@@ -38,8 +38,10 @@ class Translation(parent(__file__)):
     def loop(self, *args):
         """
         [-f|--stop] <name> [loops]: run a transformation with the author -> check -> review loop
-        (dev/tools/loop.py, on CodeScribe in .venv, model from config.yaml), detached from this
-        session; -f in the foreground, --stop stops it after recording the run.
+        (dev/tools/loop.py, on CodeScribe in .venv), detached from this session; -f in the
+        foreground, --stop stops it after recording the run. The loop speaks only the
+        OpenAI-compatible endpoint of config.yaml (OPENAI_COMP_*; model and options from
+        loop:, falling back to pi:); [loops] defaults to loop.nloop (else 10).
         It refuses an unapproved plan or a second copy. Log: transformations/<name>/runs/loop.log;
         each run's record: runs/<run_id>/; follow it with dev/bin/status <name>.
         """
@@ -49,7 +51,7 @@ class Translation(parent(__file__)):
             sys.exit(f"usage: dev/bin/loop [-f|--stop] <name> [loops]   "
                      f"(transformations: {', '.join(self.transformations)})")
         transformation = Transformation(self, args[0])
-        loops = int(args[1]) if len(args) > 1 else 10
+        loops = int(args[1]) if len(args) > 1 else int(Config().loop("nloop", "10"))
 
         if flag == "--stop":
             transformation.stop()

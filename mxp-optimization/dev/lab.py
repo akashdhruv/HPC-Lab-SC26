@@ -11,6 +11,26 @@ from pathlib import Path
 
 from lab import Approvals, Job, parent
 
+# The session's orchestrator -> OpenEvolve's LLM backend. pi and anything unknown run on the
+# OpenAI-compatible endpoint of config.yaml (provider "openai", model pi.model).
+PROVIDERS = {"claude": "claude_code", "codex": "codex_app_server"}
+
+
+def orchestrator():
+    """
+    The orchestrator of this session: HPCLAB_ORCHESTRATOR (set by the claude and pi adapters),
+    else CLAUDECODE (Claude Code sets it), else CODEX_HOME (the Codex CLI sets it for its
+    children), else ""
+    """
+    env = os.environ
+    if env.get("HPCLAB_ORCHESTRATOR"):
+        return env["HPCLAB_ORCHESTRATOR"].lower()
+    if "CLAUDECODE" in env:
+        return "claude"
+    if "CODEX_HOME" in env:
+        return "codex"
+    return ""
+
 
 class Mxp(parent(__file__)):
     image = "hpc-lab-mxp"
@@ -59,6 +79,10 @@ class Mxp(parent(__file__)):
         detached container hpc-lab-mxp-optimization; it outlives the session, one at a time.
         --status: running or not, scores, the tail of <R>/results/evolve.log; --stop: stop it, the
         search records its state; --resume: continue from the last checkpoint.
+        The LLM backend comes from config.yaml evolve.provider ("auto": this session's
+        orchestrator — claude/codex run their CLI headless with the host's login, pi uses the
+        OpenAI-compatible endpoint; an explicit provider in config.yaml or the run's
+        experiment.yaml wins).
         """
         flag, args = self.flag(args, "--status", "--stop", "--resume")
         if len(args) != 1:
@@ -117,8 +141,16 @@ class Search:
         Approvals(self.run).require("plan")
         if self.docker.running():
             sys.exit(f"a search is already running in {self.docker.name}; dev/bin/evolve --status <R>")
-        if self.docker.run(["dev/tools/search.sh", self.run, action], detach=True) == 0:
-            print(f"search started in {self.docker.name}; dev/bin/evolve --status {self.run}")
+        env = {}
+        who = orchestrator()
+        if who:  # tell the search which orchestrator started it (provider "auto" in config.yaml)
+            env["OE_ORCHESTRATOR"] = who
+            if who in PROVIDERS:  # claude/codex: their CLI headless; pi/other: openai endpoint
+                env["OE_PROVIDER"] = PROVIDERS[who]
+        if self.docker.run(["dev/tools/search.sh", self.run, action], detach=True, env=env) == 0:
+            print(f"search started in {self.docker.name}"
+                  + (f" (provider {env['OE_PROVIDER']}, from {who})" if "OE_PROVIDER" in env else "")
+                  + f"; dev/bin/evolve --status {self.run}")
 
     def stop(self):
         if not self.docker.running():

@@ -8,6 +8,9 @@ import { Venv } from "./venv";
 
 export default function (pi: ExtensionAPI) {
 	const root = process.cwd();
+	// Which orchestrator this session is: dev/bin/evolve maps it to OpenEvolve's backend
+	// (pi -> the OpenAI-compatible endpoint of config.yaml).
+	process.env.HPCLAB_ORCHESTRATOR ||= "pi";
 	const config = new Config(root);
 	new Venv(config.path).engage(root);
 	if (!config.problem) pi.registerProvider(PROVIDER, config.provider());

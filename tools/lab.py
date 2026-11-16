@@ -273,27 +273,47 @@ def run(*args):
 
 class Container:
     """
-    A system's docker image, with the tutorial mounted at /work and the system as workdir
+    A system's docker image, with the tutorial mounted at /work and the system as workdir.
+    The host's orchestrator logins come along, so a CLI inside the container (claude, codex —
+    OpenEvolve's headless backends) authenticates as the host user, subscription included:
+    the whole config dir is mounted (settings.json holds only preferences; the OAuth tokens
+    live beside it — ~/.claude/.credentials.json, ~/.codex/auth.json), and a custom host
+    CLAUDE_CONFIG_DIR / CODEX_HOME is honored. Read-write: the CLIs refresh their tokens
+    where they are.
     """
+
+    # host dir -> (container path, env var telling the CLI where its config/credentials live)
+    CREDENTIALS = {
+        ".claude": ("/credentials/claude", "CLAUDE_CONFIG_DIR"),
+        ".codex": ("/credentials/codex", "CODEX_HOME"),
+    }
 
     def __init__(self, level):
         self.level, self.image = level, level.image
         self.workdir = "/work/" + level.path.relative_to(ROOT).as_posix()
         self.name = f"hpc-lab-{level.name}"  # the detached container: one at a time per system
 
-    def command(self, args, detach=False):
+    def command(self, args, detach=False, env=None):
         options = ["--rm", "--init", "-w", self.workdir,
                    "--mount", f"type=bind,source={ROOT},target=/work"]
         if hasattr(os, "getuid"):
             options += ["--user", f"{os.getuid()}:{os.getgid()}"]
+        home = Path(os.path.expanduser("~"))
+        for host_dir, (target, env_var) in self.CREDENTIALS.items():
+            source = Path(os.environ[env_var]) if os.environ.get(env_var) else home / host_dir
+            if source.is_dir():  # mount the login only when the host has one
+                options += ["--mount", f"type=bind,source={source},target={target}",
+                            "-e", f"{env_var}={target}"]
+        for key, value in (env or {}).items():  # extra env the calling tool passes on
+            options += ["-e", f"{key}={value}"]
         if os.environ.get("MAX_PROGRAMS"):
             options += ["-e", f"MAX_PROGRAMS={os.environ['MAX_PROGRAMS']}"]
         if detach:
             options += ["-d", "--name", self.name]
         return ["docker", "run", *options, self.image, *args]
 
-    def run(self, args, detach=False):
-        return subprocess.call(self.command(args, detach))
+    def run(self, args, detach=False, env=None):
+        return subprocess.call(self.command(args, detach, env))
 
     def build(self):
         return subprocess.call(["docker", "build", "-t", self.image, str(self.level.path)])
@@ -352,7 +372,9 @@ class Approvals:
 
 class Config:
     """
-    config.yaml: the model endpoint of the harnesses (CodeScribe loop, OpenEvolve)
+    config.yaml: the OpenAI-compatible model endpoint of pi and the harnesses (the CodeScribe
+    loop, OpenEvolve). The orchestrators' own configuration (Claude Code, Codex, ...) is the
+    user's, not read here.
     """
 
     def __init__(self, path=ROOT / "config.yaml"):
@@ -392,27 +414,6 @@ class Config:
     def loop(self, key, default=""):
         """A loop: key, falling back to pi: (it runs on pi's endpoint)"""
         return self.get("loop." + key) or self.get("pi." + key, default)
-
-    def claude_settings(self):
-        """
-        Claude Code settings for the claude: endpoint of config.yaml; {} unless claude.enabled
-        """
-        if self.get("claude.enabled").lower() != "true":
-            return {}
-        model = self.get("claude.model")
-        env = {
-            "ANTHROPIC_BASE_URL": self.get("claude.base_url") or sys.exit(f"set claude.base_url in {self.path}"),
-            "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
-            "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
-            "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
-            "CLAUDE_CODE_MAX_OUTPUT_TOKENS": self.get("claude.max_output_tokens"),
-        }
-        if self.get("claude.api_key"):
-            env["ANTHROPIC_AUTH_TOKEN"] = self.get("claude.api_key")
-        settings = {"env": {k: v for k, v in env.items() if v}, "model": model}
-        if self.get("claude.api_key_helper"):
-            settings["apiKeyHelper"] = self.get("claude.api_key_helper")
-        return settings
 
     def export(self, env):
         """
@@ -588,7 +589,10 @@ def call(*args):
 class Orchestrators:
     """
     Codex and OpenCode read AGENTS.md and .agents/skills; Claude Code and pi read their own folder
-    of the directory they start in, so link it (untracked) to .agents, in the root and each system
+    of the directory they start in, so link it (untracked) to .agents, in the root and each system.
+    Only skills and adapter settings are linked: every orchestrator's model configuration (Claude
+    Code's login and settings, Codex's config) is the user's own and is never written from
+    config.yaml, which drives pi and the harnesses only.
     """
 
     LINKS = {
@@ -604,21 +608,8 @@ class Orchestrators:
                 links[".claude/skills"] = folder / ".agents" / "skills"
             for path, target in links.items():
                 link(folder / path, target)
-            self.claude_endpoint(folder / ".claude" / "settings.local.json")
-        print("Claude Code and pi linked to .agents")
-
-    def claude_endpoint(self, path):
-        """
-        The config.yaml claude: endpoint merged into settings.local.json (the user's other keys stay)
-        """
-        keys = ["env", "model", "apiKeyHelper"]
-        settings = json.loads(path.read_text()) if path.is_file() else {}
-        settings = {k: v for k, v in settings.items() if k not in keys}
-        settings.update(Config().claude_settings())
-        if settings:
-            path.write_text(json.dumps(settings, indent=2) + "\n")
-        elif path.is_file():
-            path.unlink()
+        print("Claude Code and pi linked to .agents (skills and adapter settings; "
+              "model configuration is each orchestrator's own)")
 
 
 def link(path, target):

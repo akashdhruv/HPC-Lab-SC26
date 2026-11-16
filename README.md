@@ -61,9 +61,14 @@ This repo holds two agent systems:
 The process lives in this repo, not in any one tool, so the same workflow runs under pi, Claude
 Code, Codex, OpenCode or a bespoke runtime, with any model, and can be compared fairly. Each
 system is described only by `AGENTS.md` and `.agents/`; `tools/setup` links the folders Claude
-Code (`.claude/`) and pi (`.pi/`) expect. Harnesses that must behave the same whoever starts them
-(the translate loop, the OpenEvolve search) are the system's own code and call the model in
-`config.yaml`. They run detached from the session that starts them: close it, come back later
+Code (`.claude/`) and pi (`.pi/`) expect — skills and adapter settings only, never their model
+configuration, which each orchestrator brings itself. Harnesses that must behave the same
+whoever starts them (the translate loop, the OpenEvolve search) are the system's own code and
+call the model on the OpenAI-compatible endpoint in `config.yaml` (`OPENAI_COMP_*`, with the
+`pi:`, `loop:` and `evolve:` sections). The translate loop speaks only that endpoint, so drive it
+with pi; under Claude Code or Codex, run mxp-optimization and set `evolve.provider` to
+`claude_code` or `codex_app_server` — OpenEvolve then drives that CLI headless as its backend.
+They run detached from the session that starts them: close it, come back later
 and probe them with `status` (loop) or `evolve --status <run>` (search).
 Approvals are the scientist's alone: `approve`, never the agent.
 
@@ -82,7 +87,7 @@ You need git, Docker, Python >= 3.10 and one orchestrator (Node.js too if it is
 ```bash
 git clone --recursive <this repo> && cd SC26-Tutorial
 tools/setup              # .venv, orchestrator links, docker images, both checks (--native skips docker)
-$EDITOR config.yaml      # model endpoint and key for the harnesses (and pi)
+$EDITOR config.yaml      # the OpenAI-compatible endpoint and key for pi, the loop and evolve
 ```
 
 Then open an agent in a system folder and ask for a stage.
@@ -90,7 +95,7 @@ Then open an agent in a system folder and ask for a stage.
 **Translation** — Fortran to C++ with an autonomous loop:
 
 ```bash
-cd code-translation && pi        # or: claude, codex, opencode
+cd code-translation && pi        # the loop speaks the OpenAI-compatible endpoint of config.yaml
 ```
 
     > Show me the translate plan.          (review transformations/app-translate/)
@@ -102,7 +107,7 @@ cd code-translation && pi        # or: claude, codex, opencode
 **Optimization** — mixed precision with RAPTOR, then an evolutionary search:
 
 ```bash
-cd mxp-optimization && claude    # or: pi, codex, opencode
+cd mxp-optimization && claude    # or: pi, codex, opencode; evolve.provider runs your CLI headless
 ```
 
     > raptorize, plan mode                  (writes the plan in experiments/<E>/<n>-raptorize/)
@@ -119,7 +124,7 @@ Each system's `AGENTS.md` has the details, and
 ## Layout
 
 ```
-config.yaml                  model endpoint of pi, the loop, evolve and Claude Code (pi:, loop:, evolve:, claude:)
+config.yaml                  the OpenAI-compatible endpoint of pi, the loop and evolve (OPENAI_COMP_*, pi:, loop:, evolve:)
 tools/                       setup and what every system inherits (tools/README.md: the contract)
                              approve, container; lab.py (class Lab, levels, dispatch)
 .agents/adapters/            Claude Code and pi settings and extension, linked by setup

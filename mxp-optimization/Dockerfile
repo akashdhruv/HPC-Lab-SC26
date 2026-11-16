@@ -40,6 +40,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && /opt/venv/bin/pip install --no-cache-dir matplotlib
 
+# The orchestrator CLIs for OpenEvolve's headless backends (evolve.provider: claude_code /
+# codex_app_server). No key is baked in: they authenticate with the host's login, which the
+# container verb mounts at run time (../tools/README.md) — ~/.claude -> /credentials/claude
+# (CLAUDE_CONFIG_DIR), ~/.codex -> /credentials/codex (CODEX_HOME).
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g @anthropic-ai/claude-code @openai/codex \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV RAPTOR_INSTALL_DIR=/opt/raptor-install \
     PY=/opt/venv/bin/python \
     PATH=/opt/venv/bin:$PATH \

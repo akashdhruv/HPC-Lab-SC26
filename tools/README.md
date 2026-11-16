@@ -69,9 +69,10 @@ tools/                      the root
 6. Agents call tools by path (`dev/bin/oracle`, `../tools/container`); the adapters (Claude Code's
    venv.sh, pi's hpclab extension) also put the system's `dev/bin`, then `tools/`, on PATH, so a
    bare `container` resolves as rule 4 does. `approve` stays the scientist's: the adapters block it.
-   With `claude.enabled: true` in `config.yaml`, `tools/setup` writes Claude Code's endpoint
-   (`ANTHROPIC_BASE_URL`, the model, `apiKeyHelper`) to each `.claude/settings.local.json`
-   (its `env`, `model` and `apiKeyHelper` keys; others stay). Rerun setup after editing.
+   The adapters link only skills and their own settings (`.claude/skills`, `.claude/settings.json`,
+   `.pi/...`); each orchestrator's model configuration is the user's own — setup never writes
+   `.claude/settings.local.json`. `config.yaml` drives pi and the harnesses (the loop, OpenEvolve)
+   on its OpenAI-compatible endpoint only.
 
 ## Portability
 
@@ -100,5 +101,5 @@ tools/                      the root
 |---|---|
 | `setup [--native]` | links for Claude Code and pi, `.venv`, pi; then submodules, images and checks of every system |
 | `approve <instance> "<item>" [note]` | records an approval in `<instance>/approvals.toml`: the scientist only |
-| `container [-d] <command ...>` | a command in the system's image, the tutorial at `/work`, the system as workdir |
+| `container [-d] <command ...>` | a command in the system's image, the tutorial at `/work`, the system as workdir; the host's `~/.claude` / `~/.codex`, when present, are mounted at `/credentials` with `CLAUDE_CONFIG_DIR` / `CODEX_HOME` set, so the claude / codex CLIs in the container use the host's login; a tool may also pass extra `-e` vars (e.g. `dev/bin/evolve` passes the session's orchestrator as `OE_PROVIDER`) |
 | `check` (no stub) | the system's check, run by `setup`; each system overrides it |

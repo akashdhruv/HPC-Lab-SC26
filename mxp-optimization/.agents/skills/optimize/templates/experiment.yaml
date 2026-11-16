@@ -8,6 +8,11 @@ timeout: 300
 
 # Per-run override of config.yaml evolve:
 # openevolve: {model: "<model>", max_tokens: 16000, reasoning_effort: low}
+# provider: "auto" = the orchestrator of the session that starts the search (claude ->
+# claude_code, codex -> codex_app_server, pi/other -> openai on the endpoint in config.yaml);
+# "claude_code" / "codex_app_server" run that CLI headless under the host's login; budget
+# caps each CLI call:
+# openevolve: {model: "sonnet", provider: claude_code, budget: "$5"}
 
 problem: |
   The EVOLVE-BLOCK in app/src/advect.cpp holds wenoFaceValue and advectWeno: the WENO5

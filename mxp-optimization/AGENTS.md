@@ -17,7 +17,10 @@ its own provenance record:
 - raptorize (interactive session, `.agents/skills/raptorize/SKILL.md`): RAPTOR precision modes,
   an FP64 shadow and an EVOLVE-BLOCK for `advectWeno`; checkpoints with `dev/bin/patch`.
 - optimize (OpenEvolve search, `.agents/skills/optimize/SKILL.md`): the kernel made more accurate
-  under bf16. `dev/bin/evolve <R>` runs this system's search (`dev/tools/search.sh`, models from
-  config.yaml) detached, in the container `hpc-lab-mxp-optimization`; `--status`, `--stop`,
-  `--resume`. `dev/bin/animate <R> [id]` renders a candidate against the seed.
+  under bf16. `dev/bin/evolve <R>` runs this system's search (`dev/tools/search.sh`, backend and
+  model from config.yaml `evolve`) detached, in the container `hpc-lab-mxp-optimization`;
+  `--status`, `--stop`, `--resume`. `evolve.provider: "auto"` picks this session's orchestrator:
+  claude/codex drive their CLI headless, pi uses the OpenAI-compatible endpoint; the container
+  mounts the host's `~/.claude` / `~/.codex`, so a claude/codex search uses the host's
+  `claude login` / `codex login`. `dev/bin/animate <R> [id]` renders a candidate against the seed.
 - `../tools/approve <R> plan`, then `result` or `"candidate <id>"`: scientist only.

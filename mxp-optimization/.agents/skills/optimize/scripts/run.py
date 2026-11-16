@@ -47,12 +47,21 @@ def interrupt(*_):
     raise KeyboardInterrupt
 
 
+# OpenEvolve LLM backends that run a CLI headless (no endpoint, no key: the CLI's own login)
+CLI_PROVIDERS = {"claude_code", "codex_app_server", "copilot_cli"}
+
+# Model each CLI backend gets when neither openevolve: nor evolve: names one
+DEFAULT_MODELS = {"claude_code": "sonnet", "codex_app_server": "gpt-5.3-codex",
+                  "copilot_cli": "claude-sonnet-4.6"}
+
+
 class Endpoint:
-    """Model endpoint from the tutorial's config.yaml"""
+    """The model endpoint, the pi: and the evolve: section of the tutorial's config.yaml"""
 
     def __init__(self, path=TUTORIAL / "config.yaml"):
         if not path.is_file():
             sys.exit(f"{path} missing")
+        self.path = path
 
         config = yaml.safe_load(path.read_text()) or {}
         def resolve(value):
@@ -68,10 +77,41 @@ class Endpoint:
             return value
         self.base_url = resolve(config.get("OPENAI_COMP_BASEURL", ""))
         self.api_key = resolve(config.get("OPENAI_COMP_APIKEY", ""))
+        self.pi = config.get("pi") or {}
         self.evolve = config.get("evolve") or {}
 
+    def provider(self, options):
+        """
+        The OpenEvolve LLM backend, as (provider, explicit): the run's openevolve: override,
+        else evolve.provider in config.yaml. "auto" (the default, not explicit) means
+        OE_PROVIDER — the orchestrator of the session that started the search, detected by
+        dev/bin/evolve and passed into the container (claude -> claude_code, codex ->
+        codex_app_server) — else "openai", the endpoint above. The CLI providers run that
+        CLI headless under the host's login, so they need no key.
+        """
+        raw = str(options.get("provider") or "").strip()
+        if raw in ("", "auto"):
+            return os.environ.get("OE_PROVIDER") or "openai", False
+        return raw, True
+
+    def model(self, options, provider, explicit, run_over):
+        """
+        The model for that backend. "openai": openevolve: / evolve: model, else pi.model (the
+        pi session's endpoint). A CLI backend: openevolve: model, else evolve.model from
+        config.yaml (assumed available through the user's CLI login), else the backend's default
+        alias.
+        """
+        if provider == "openai":
+            return options.get("model") or self.pi.get("model")
+        return (run_over.get("model")
+                or self.evolve.get("model")
+                or DEFAULT_MODELS.get(provider))
+
+    def require_endpoint(self):
+        """Exit unless the OpenAI-compatible endpoint is set (provider "openai" needs it)"""
         if not self.base_url or not self.api_key:
-            sys.exit(f"set OPENAI_COMP_BASEURL and OPENAI_COMP_APIKEY in {path}")
+            sys.exit(f"set OPENAI_COMP_BASEURL and OPENAI_COMP_APIKEY in {self.path} "
+                     f"(evolve.provider: openai)")
 
 
 class Run:
@@ -175,22 +215,33 @@ class Run:
 
     def openevolve_config(self, spec, endpoint):
         """
-        OpenEvolve's config from experiment.yaml and config.yaml's evolve section
+        OpenEvolve's config from experiment.yaml and config.yaml's evolve section. The LLM
+        backend is evolve.provider: "openai" (default) on the endpoint above, or a CLI run
+        headless (claude_code, codex_app_server) under the user's own login.
         """
-        options = {**endpoint.evolve, **(spec.get("openevolve") or {})}
-        model = options.get("model")
+        run_over = spec.get("openevolve") or {}
+        options = {**endpoint.evolve, **run_over}
+        provider, explicit = endpoint.provider(options)
+        model = endpoint.model(options, provider, explicit, run_over)
         if not model:
-            sys.exit("set evolve.model in config.yaml")
+            sys.exit(f"set evolve.model (or openevolve: model) for provider {provider!r} "
+                     f"in {endpoint.path}")
 
+        model_cfg = {"name": model, "weight": 1.0, "provider": provider}
+        if options.get("budget") and provider in CLI_PROVIDERS:  # per-call cap, "$5" -> 5.0
+            model_cfg["max_budget_usd"] = float(str(options["budget"]).lstrip("$"))
         llm = {
-            "models": [{"name": model, "weight": 1.0}],
-            "api_base": endpoint.base_url,
-            "api_key": "${OPENAI_API_KEY}",
+            "provider": provider,
+            "models": [model_cfg],
             "max_tokens": options.get("max_tokens", 16000),
             "timeout": options.get("timeout", 300),
         }
         if options.get("reasoning_effort"):
             llm["reasoning_effort"] = options["reasoning_effort"]
+        if provider == "openai":
+            endpoint.require_endpoint()
+            llm["api_base"] = endpoint.base_url
+            llm["api_key"] = "${OPENAI_API_KEY}"
 
         return {
             "max_iterations": spec["max_programs"],
@@ -265,11 +316,12 @@ class Run:
         env = {
             **os.environ,
             "EVAL_LOG": str(self.results / "evaluations.jsonl"),
-            "OPENAI_API_KEY": endpoint.api_key,
             "OE_EVALUATOR": str(self.path / "evaluator.py"),
             "OE_TIMEOUT": str(spec["timeout"]),
             "OE_PYTHON": sys.executable,
         }
+        if endpoint.api_key:  # only provider "openai" reads it
+            env["OPENAI_API_KEY"] = endpoint.api_key
 
         subprocess.run(command, env=env, check=True)
 
